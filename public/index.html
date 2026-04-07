@@ -438,13 +438,25 @@ textarea.note:focus{outline:none;border-color:var(--green);background:#fff}
   </div>
 </div>
 
+<div class="modal-overlay" id="email-draft-modal" onclick="if(event.target===this)closeEmailDraftModal()">
+  <div class="modal" style="max-width:560px">
+    <div class="modal-head">
+      <div class="modal-title">✉ Bozza email AI</div>
+      <button class="btn btn-xs" onclick="closeEmailDraftModal()">✕</button>
+    </div>
+    <div class="modal-body" id="email-draft-body">
+      <div style="text-align:center;padding:30px"><div class="spin"></div></div>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast-el"></div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 const SUPABASE_URL = 'https://uawcravixdfgbqermwsn.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_MCOdhtr5GDpbgqZeJZw88w__b9LIa3c';
-const BACKEND = 'https://followup-ai.onrender.com';
+const BACKEND = '';
 
 const DEMOS = [
   "Ho chiamato Mario Rossi di Rossi Alimentari. Vuole sconto 5% sul lotto frozen 200kg. Richiamare giovedì con proposta.",
@@ -478,17 +490,15 @@ sb.auth.onAuthStateChange(async(event,session)=>{
     }
     document.getElementById('auth').style.display='none';
     const app=document.getElementById('app');app.style.display='flex';
-    await loadTeam();loadPipeline();loadTasks();loadProjects();
+    await loadTeam();loadPipeline();loadTasks();loadProjects();checkOutlookStatus();
   }
 });
 
-async function loadTasks(){try{const{tasks}=await api('/api/tasks');if(!window.allTasks)window.allTasks=tasks;renderTasksList(tasks);checkOutlookStatus()}catch(e){toast('Errore caricamento task: '+e.message)}}
+async function loadTasks(){try{const{tasks}=await api('/api/tasks');window.allTasks=tasks;renderTasksList(tasks)}catch(e){toast('Errore caricamento task: '+e.message)}}
 
-async function checkOutlookStatus(){try{const{connected}=await api('/api/outlook/status');if(connected){document.getElementById('outlook-btn').textContent='✓ Outlook connesso';document.getElementById('outlook-btn').style.background='#1D9E75';document.getElementById('outlook-btn').style.color='#fff'}else{document.getElementById('outlook-btn').textContent='📧 Connetti Outlook';document.getElementById('outlook-btn').style.background='';document.getElementById('outlook-btn').style.color=''}}catch(e){}}
+async function checkOutlookStatus(){try{const{connected}=await api('/api/outlook/status');const btn=document.getElementById('outlook-btn');if(connected){btn.textContent='✓ Outlook';btn.style.background='#1D9E75';btn.style.color='#fff';btn.style.borderColor='#0F6E56'}else{btn.textContent='📧 Outlook';btn.style.background='';btn.style.color='';btn.style.borderColor=''}}catch(e){}}
 
-async function connectOutlook(){try{const{authUrl}=await api('/api/outlook/authorize');window.open(authUrl,'outlook_auth','width=600,height=700');setTimeout(()=>{checkOutlookStatus();loadTasks()},2000)}catch(e){toast(e.message)}}
-
-async function loadTasks(){try{const{tasks}=await api('/api/tasks');if(!window.allTasks)window.allTasks=tasks;renderTasksList(tasks)}catch(e){toast('Errore caricamento task: '+e.message)}}
+async function connectOutlook(){try{const{authUrl}=await api('/api/outlook/authorize');window.open(authUrl,'outlook_auth','width=600,height=700');setTimeout(()=>{checkOutlookStatus()},3000)}catch(e){toast(e.message)}}
 
 function applyFilters(){if(!window.allTasks)return;const status=document.getElementById('filter-status').value;const priority=document.getElementById('filter-priority').value;const type=document.getElementById('filter-type').value;let filtered=window.allTasks;if(status!==''){filtered=filtered.filter(t=>String(t.completed)===status)}if(priority){filtered=filtered.filter(t=>t.priority===priority)}if(type){filtered=filtered.filter(t=>t.type===type)}renderTasksList(filtered)}
 
@@ -505,7 +515,10 @@ ${t.urgent?'<span style="background:var(--coral-l);color:var(--coral-d);padding:
 ${t.assigned_to?`<div style="font-size:10px;color:var(--g600);margin-top:4px">Assegnato a: ${t.assigned_to.full_name}</div>`:'<div style="font-size:10px;color:var(--g400);margin-top:4px">Non assegnato</div>'}
 ${t.contact?`<div style="font-size:10px;color:var(--g600)">→ ${t.contact.name}</div>`:''}
 </div>
-<button class="btn btn-xs" style="color:var(--g400)" onclick="event.stopPropagation();deleteTask('${t.id}')">×</button>
+<div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0">
+  <button class="btn btn-xs" style="color:var(--g400);font-size:11px" onclick="event.stopPropagation();deleteTask('${t.id}')">×</button>
+  <button class="btn btn-xs" style="font-size:10px;padding:3px 7px" onclick="event.stopPropagation();suggestEmailDraft('${t.id}')" title="Bozza email AI">✉</button>
+</div>
 </div>`).join('')}
 
 function expandTask(event,taskId){const task=window.allTasks.find(t=>t.id===taskId);if(!task)return;const modal=document.getElementById('task-modal');document.getElementById('task-modal-id').value=taskId;document.getElementById('task-modal-title').value=task.title;document.getElementById('task-modal-type').value=task.type||'task';document.getElementById('task-modal-priority').value=task.priority||'media';document.getElementById('task-modal-due').value=task.due_date?task.due_date.split('T')[0]:'';document.getElementById('task-modal-urgent').checked=task.urgent||false;const sel=document.getElementById('task-modal-assignee');sel.innerHTML=`<option value="">Non assegnato</option><option value="${me.id}">Me (${me.full_name})</option>${(teamList||[]).map(m=>`<option value="${m.id}" ${task.assigned_to?.id===m.id?'selected':''}>${m.full_name}</option>`).join('')}`;if(task.assigned_to)sel.value=task.assigned_to.id;modal.classList.add('on')}
@@ -659,6 +672,44 @@ if('serviceWorker' in navigator){navigator.serviceWorker.register('/sw.js').catc
 let deferredPrompt=null;
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;document.getElementById('install-bar').classList.add('on')});
 document.getElementById('install-btn').addEventListener('click',async()=>{if(!deferredPrompt)return;deferredPrompt.prompt();const{outcome}=await deferredPrompt.userChoice;if(outcome==='accepted')document.getElementById('install-bar').classList.remove('on');deferredPrompt=null});
+
+async function suggestEmailDraft(taskId){
+  const task=window.allTasks?.find(t=>t.id===taskId);
+  if(!task)return;
+  const modal=document.getElementById('email-draft-modal');
+  const body=document.getElementById('email-draft-body');
+  modal.classList.add('on');
+  body.innerHTML='<div style="text-align:center;padding:30px"><div class="spin"></div><div style="font-size:13px;color:var(--g400);margin-top:10px">Claude sta scrivendo...</div></div>';
+  try{
+    const{suggestion}=await api('/api/ai/suggest-followup',{method:'POST',body:{
+      contact_name:task.contact?.name||'',
+      company:task.contact?.company||'',
+      stage:'warm',
+      last_interaction:'',
+      open_tasks:task.title
+    }});
+    const draft=suggestion.message_draft||'';
+    const action=suggestion.action||'';
+    const reason=suggestion.reason||'';
+    body.innerHTML=`
+      <div style="margin-bottom:16px">
+        <div class="r-lbl" style="margin-bottom:6px">Task</div>
+        <div style="font-size:13px;font-weight:600;color:var(--g900)">${task.title}</div>
+        ${task.contact?`<div style="font-size:12px;color:var(--g600);margin-top:2px">${task.contact.name}${task.contact.company?' · '+task.contact.company:''}</div>`:''}
+      </div>
+      ${action?`<div style="background:var(--amber-l);border-radius:var(--rsm);padding:10px 13px;font-size:13px;color:var(--amber-d);margin-bottom:14px">💡 ${action}</div>`:''}
+      ${reason?`<div style="font-size:12px;color:var(--g600);margin-bottom:14px;line-height:1.5">📌 ${reason}</div>`:''}
+      <div class="r-lbl" style="margin-bottom:8px">Bozza email</div>
+      <textarea id="draft-text" style="width:100%;min-height:140px;border:1px solid var(--g200);border-radius:var(--r);padding:12px;font-size:13px;font-family:inherit;color:var(--g900);background:var(--g50);resize:vertical;line-height:1.6">${draft}</textarea>
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button class="btn btn-green" style="flex:1;justify-content:center" onclick="copyEmailDraft()">Copia testo</button>
+        <button class="btn" style="flex:1;justify-content:center" onclick="closeEmailDraftModal()">Chiudi</button>
+      </div>`;
+  }catch(e){body.innerHTML=`<div style="padding:16px;color:#D85A30;font-size:13px">Errore: ${e.message}</div>`}
+}
+
+function copyEmailDraft(){const t=document.getElementById('draft-text');if(!t)return;navigator.clipboard.writeText(t.value).then(()=>toast('Testo copiato!')).catch(()=>{t.select();document.execCommand('copy');toast('Testo copiato!')})}
+function closeEmailDraftModal(){document.getElementById('email-draft-modal').classList.remove('on')}
 
 function toast(msg){const el=document.getElementById('toast-el');el.textContent=msg;el.classList.add('on');setTimeout(()=>el.classList.remove('on'),3000)}
 </script>

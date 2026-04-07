@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const { startReminderCron, runReminderJob } = require('./services/emailReminder');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -35,6 +36,16 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Test endpoint: triggera manualmente l'invio dei reminder (solo admin)
+app.post('/api/reminders/test', async (req, res) => {
+  try {
+    await runReminderJob();
+    res.json({ success: true, message: 'Job reminder eseguito — controlla i log e la tua email' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 app.get('*', (req, res) => {
   if (!req.path.startsWith('/api/')) {
     res.sendFile(path.join(__dirname, 'public', 'index.html'));
@@ -55,4 +66,6 @@ app.listen(PORT, () => {
   console.log('SUPABASE_URL:', process.env.SUPABASE_URL ? '✓' : '✗');
   console.log('ANTHROPIC_API_KEY:', process.env.ANTHROPIC_API_KEY ? '✓' : '✗');
   console.log('OPENAI_API_KEY:', process.env.OPENAI_API_KEY ? '✓' : '✗');
+  console.log('SMTP_USER:', process.env.SMTP_USER ? '✓' : '✗ (reminder disabilitati)');
+  startReminderCron();
 });

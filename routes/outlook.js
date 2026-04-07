@@ -3,6 +3,7 @@ const router = express.Router();
 const axios = require('axios');
 const { requireAuth } = require('../middleware/auth');
 const { createClient } = require('@supabase/supabase-js');
+const { syncTaskToOutlook, updateOutlookEvent } = require('../services/outlookSync');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -71,97 +72,7 @@ router.get('/callback', async (req, res) => {
   }
 });
 
-// Funzione per refreshare token se scaduto
-async function getValidToken(userId) {
-  const { data: tokenData, error: getError } = await supabase
-    .from('outlook_tokens')
-    .select('*')
-    .eq('user_id', userId)
-    .single();
-
-  if (getError) throw new Error('Token non trovato');
-
-  // Se il token è scaduto, refresharlo
-  if (new Date(tokenData.expires_at) < new Date()) {
-    try {
-      const refreshResponse = await axios.post(
-        `https://login.microsoftonline.com/${MICROSOFT_TENANT}/oauth2/v2.0/token`,
-        new URLSearchParams({
-          client_id: MICROSOFT_CLIENT_ID,
-          client_secret: MICROSOFT_CLIENT_SECRET,
-          refresh_token: tokenData.refresh_token,
-          grant_type: 'refresh_token',
-          scope: 'https://graph.microsoft.com/Calendars.ReadWrite offline_access'
-        })
-      );
-
-      const { access_token, refresh_token } = refreshResponse.data;
-      
-      await supabase
-        .from('outlook_tokens')
-        .update({
-          access_token,
-          refresh_token,
-          expires_at: new Date(Date.now() + 3600 * 1000).toISOString()
-        })
-        .eq('user_id', userId);
-
-      return access_token;
-    } catch (e) {
-      throw new Error('Errore refresh token');
-    }
-  }
-
-  return tokenData.access_token;
-}
-
-// Crea un evento in Outlook Calendar
-async function createOutlookEvent(token, task) {
-  const dueDate = new Date(task.due_date);
-  const startTime = new Date(dueDate);
-  startTime.setHours(10, 0, 0); // Evento alle 10:00
-  const endTime = new Date(startTime);
-  endTime.setHours(11, 0, 0); // Durata 1 ora
-
-  const event = {
-    subject: task.title,
-    bodyPreview: task.notes || `Task: ${task.title}`,
-    start: {
-      dateTime: startTime.toISOString(),
-      timeZone: 'Europe/Rome'
-    },
-    end: {
-      dateTime: endTime.toISOString(),
-      timeZone: 'Europe/Rome'
-    },
-    categories: [`followup-ai-${task.type}`],
-    isReminderOn: true,
-    reminderMinutesBeforeStart: 60 * 8, // 8 ore prima (mattino stesso)
-    body: {
-      contentType: 'HTML',
-      content: `<p><strong>${task.title}</strong></p><p>Tipo: ${task.type}</p><p>Priorità: ${task.priority}</p>${task.notes ? `<p>Note: ${task.notes}</p>` : ''}`
-    },
-    extensions: [
-      {
-        '@odata.type': '#microsoft.graph.openTypeExtension',
-        extensionName: 'com.followupai.task',
-        taskId: task.id,
-        taskType: task.type,
-        taskPriority: task.priority
-      }
-    ]
-  };
-
-  const response = await axios.post(
-    'https://graph.microsoft.com/v1.0/me/events',
-    event,
-    { headers: { 'Authorization': `Bearer ${token}` } }
-  );
-
-  return response.data.id; // Ritorna l'ID dell'evento Outlook
-}
-
-// POST crea task E sincronizza con Outlook
+// POST sincronizza task esistente con Outlook
 router.post('/sync-task', requireAuth, async (req, res) => {
   const { task_id } = req.body;
 
@@ -175,26 +86,8 @@ router.post('/sync-task', requireAuth, async (req, res) => {
 
     if (taskError) throw taskError;
 
-    // Se l'utente ha Outlook connesso, crea l'evento
-    try {
-      const token = await getValidToken(req.profile.id);
-      const outlookEventId = await createOutlookEvent(token, task);
-
-      // Salva il collegamento task <-> outlook event nel DB
-      await supabase
-        .from('task_outlook_sync')
-        .insert({
-          task_id,
-          outlook_event_id: outlookEventId,
-          user_id: req.profile.id,
-          synced_at: new Date().toISOString()
-        });
-
-      res.json({ success: true, synced: true, outlookEventId });
-    } catch (e) {
-      // Outlook non è connesso, ma il task è stato comunque creato
-      res.json({ success: true, synced: false, message: 'Task creato, ma Outlook non è connesso' });
-    }
+    const result = await syncTaskToOutlook(req.profile.id, task);
+    res.json({ success: true, ...result });
   } catch (e) {
     console.error('Errore sync task:', e.message);
     res.status(500).json({ error: e.message });
@@ -206,29 +99,8 @@ router.patch('/sync-task/:id', requireAuth, async (req, res) => {
   const { completed } = req.body;
 
   try {
-    // Prendi il collegamento task-outlook
-    const { data: sync, error: syncError } = await supabase
-      .from('task_outlook_sync')
-      .select('*')
-      .eq('task_id', req.params.id)
-      .single();
-
-    if (!syncError && sync && sync.outlook_event_id) {
-      const token = await getValidToken(req.profile.id);
-
-      // Aggiorna l'evento in Outlook
-      const updateData = completed ? 
-        { categories: ['followup-ai-completed'] } :
-        { categories: ['followup-ai-active'] };
-
-      await axios.patch(
-        `https://graph.microsoft.com/v1.0/me/events/${sync.outlook_event_id}`,
-        updateData,
-        { headers: { 'Authorization': `Bearer ${token}` } }
-      );
-    }
-
-    res.json({ success: true, synced: !!sync });
+    const result = await updateOutlookEvent(req.profile.id, req.params.id, completed);
+    res.json({ success: true, ...result });
   } catch (e) {
     console.error('Errore update sync:', e.message);
     res.status(500).json({ error: e.message });

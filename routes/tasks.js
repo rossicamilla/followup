@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { createClient } = require('@supabase/supabase-js');
 const { requireAuth } = require('../middleware/auth');
+const { syncTaskToOutlook, updateOutlookEvent } = require('../services/outlookSync');
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -76,25 +77,9 @@ router.post('/', requireAuth, async (req, res) => {
     if (error) throw error;
     
     // Sincronizza con Outlook Calendar se l'utente è connesso
-    if (due_date) {
-      try {
-        const outlookRoute = require('./outlook');
-        // Chiamata interna per sincronizzare
-        await fetch(`${process.env.BACKEND}/api/outlook/sync-task`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${req.header('Authorization')?.replace('Bearer ', '')}`
-          },
-          body: JSON.stringify({ task_id: data.id })
-        }).catch(() => {}); // Non bloccare se Outlook non è disponibile
-      } catch (e) {
-        // Outlook sync fallito, ma il task è stato comunque creato
-        console.log('Outlook sync warning:', e.message);
-      }
-    }
+    const outlookResult = await syncTaskToOutlook(req.profile.id, data);
 
-    res.json({ success: true, task: data, outlookSynced: due_date ? 'pending' : 'no_date' });
+    res.json({ success: true, task: data, outlookSynced: outlookResult.synced });
   } catch (e) {
     console.error('Errore POST task:', e.message);
     res.status(500).json({ error: e.message });
@@ -159,18 +144,7 @@ router.patch('/:id', requireAuth, async (req, res) => {
     
     // Sincronizza completamento con Outlook
     if (completed !== undefined) {
-      try {
-        await fetch(`${process.env.BACKEND}/api/outlook/sync-task/${req.params.id}`, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${req.header('Authorization')?.replace('Bearer ', '')}`
-          },
-          body: JSON.stringify({ completed })
-        }).catch(() => {});
-      } catch (e) {
-        console.log('Outlook sync warning:', e.message);
-      }
+      await updateOutlookEvent(req.profile.id, req.params.id, completed);
     }
 
     res.json({ success: true, task: data });
