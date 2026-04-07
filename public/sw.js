@@ -1,4 +1,4 @@
-const CACHE = 'followup-v1';
+const CACHE = 'followup-v2';
 const ASSETS = [
   '/',
   '/index.html',
