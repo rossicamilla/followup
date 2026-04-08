@@ -1,5 +1,6 @@
 import { useState, useEffect, createContext, useContext } from 'react'
 import { supabase } from './lib/supabase'
+import { api } from './lib/api'
 import Login from './components/auth/Login'
 import Layout from './components/layout/Layout'
 import Pipeline from './components/pipeline/Pipeline'
@@ -28,9 +29,10 @@ export default function App() {
   }, [])
 
   useEffect(() => {
-    if (!session) { setProfile(null); return }
+    if (!session) { setProfile(null); setTeam([]); return }
     supabase.from('profiles').select('*').eq('id', session.user.id).single()
       .then(({ data }) => setProfile(data))
+    api('/api/team/stats').then(d => setTeam(d.members || [])).catch(() => {})
   }, [session])
 
   if (loading) return (
