@@ -37,14 +37,11 @@ export default function Login() {
       <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="flex items-center gap-3 mb-10 justify-center">
-          <div className="w-9 h-9 bg-brand-500 rounded-xl flex items-center justify-center">
-            <svg viewBox="0 0 18 18" fill="none" className="w-5 h-5">
-              <path d="M3 9C3 5.7 5.7 3 9 3s6 2.7 6 6-2.7 6-6 6" stroke="#fff" strokeWidth="1.8" strokeLinecap="round"/>
-              <circle cx="9" cy="9" r="2" fill="#fff"/>
-            </svg>
+          <div className="w-9 h-9 bg-blue-600 rounded-xl flex items-center justify-center">
+            <span className="text-white font-700 text-lg leading-none">F</span>
           </div>
           <div>
-            <div className="text-white font-bold text-xl tracking-tight">FollowUp AI</div>
+            <div className="text-white font-700 text-xl tracking-tight">FollowUp AI</div>
             <div className="text-warm-400 text-xs">Confluencia · CRM interno</div>
           </div>
         </div>

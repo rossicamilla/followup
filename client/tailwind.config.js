@@ -3,31 +3,37 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Inter', '-apple-system', 'sans-serif'],
+        sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
       },
       colors: {
         brand: {
-          50:  '#EDFAF4',
-          100: '#C6EFE2',
-          200: '#8ED8BE',
-          500: '#1D9E75',
-          600: '#0E7A5A',
-          700: '#0A5C44',
+          50:  '#EFF6FF',
+          100: '#DBEAFE',
+          200: '#BFDBFE',
+          400: '#60A5FA',
+          500: '#3B82F6',
+          600: '#2563EB',
+          700: '#1D4ED8',
         },
         warm: {
-          50:  '#FAFAF9',
-          100: '#F5F2ED',
-          200: '#E8E4DC',
-          300: '#D4CFC6',
-          400: '#A8A29E',
-          500: '#78716C',
-          600: '#57534E',
-          700: '#3D3935',
-          900: '#1C1917',
+          50:  '#F9FAFB',
+          100: '#F3F4F6',
+          200: '#E5E7EB',
+          300: '#D1D5DB',
+          400: '#9CA3AF',
+          500: '#6B7280',
+          600: '#4B5563',
+          700: '#374151',
+          900: '#111827',
         }
       },
       fontSize: {
         '2xs': ['10px', '14px'],
+      },
+      fontWeight: {
+        500: '500',
+        600: '600',
+        700: '700',
       }
     }
   },
