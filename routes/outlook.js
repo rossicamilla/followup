@@ -1,10 +1,30 @@
 const express = require('express');
 const router = express.Router();
+const crypto = require('crypto');
 const axios = require('axios');
 const Anthropic = require('@anthropic-ai/sdk');
 const { requireAuth } = require('../middleware/auth');
 const { createClient } = require('@supabase/supabase-js');
 const { syncTaskToOutlook, updateOutlookEvent, getValidToken } = require('../services/outlookSync');
+
+// In-memory store for OAuth state nonces: nonce -> { userId, expiresAt }
+// TTL of 10 minutes is sufficient for the OAuth redirect round-trip.
+const oauthStateStore = new Map();
+const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
+
+function generateOAuthState(userId) {
+  const nonce = crypto.randomBytes(32).toString('hex');
+  oauthStateStore.set(nonce, { userId, expiresAt: Date.now() + OAUTH_STATE_TTL_MS });
+  return nonce;
+}
+
+function consumeOAuthState(nonce) {
+  const entry = oauthStateStore.get(nonce);
+  if (!entry) return null;
+  oauthStateStore.delete(nonce);
+  if (Date.now() > entry.expiresAt) return null;
+  return entry.userId;
+}
 
 const claude = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
@@ -21,13 +41,14 @@ const MICROSOFT_TENANT = process.env.MICROSOFT_TENANT || 'common';
 // Genera il link per autorizzazione (prima volta)
 router.get('/authorize', requireAuth, (req, res) => {
   const scope = encodeURIComponent('https://graph.microsoft.com/Calendars.ReadWrite https://graph.microsoft.com/Mail.Read offline_access');
-  const authUrl = `https://login.microsoftonline.com/${MICROSOFT_TENANT}/oauth2/v2.0/authorize?client_id=${MICROSOFT_CLIENT_ID}&response_type=code&scope=${scope}&redirect_uri=${encodeURIComponent(MICROSOFT_REDIRECT_URI)}&state=${req.profile.id}&prompt=consent`;
+  const state = generateOAuthState(req.profile.id);
+  const authUrl = `https://login.microsoftonline.com/${MICROSOFT_TENANT}/oauth2/v2.0/authorize?client_id=${MICROSOFT_CLIENT_ID}&response_type=code&scope=${scope}&redirect_uri=${encodeURIComponent(MICROSOFT_REDIRECT_URI)}&state=${state}&prompt=consent`;
   res.json({ success: true, authUrl });
 });
 
 // Callback dopo che l'utente autorizza
 router.get('/callback', async (req, res) => {
-  const { code, state: userId, error, error_description } = req.query;
+  const { code, state: nonce, error, error_description } = req.query;
 
   // Microsoft ha restituito un errore OAuth
   if (error) {
@@ -35,8 +56,15 @@ router.get('/callback', async (req, res) => {
     return res.redirect(`/?outlook=error&msg=${encodeURIComponent(error_description || error)}`);
   }
 
-  if (!code || !userId) {
+  if (!code || !nonce) {
     return res.redirect('/?outlook=error&msg=Missing+code+or+state');
+  }
+
+  // Validate and consume the state nonce — rejects forged/replayed callbacks
+  const userId = consumeOAuthState(nonce);
+  if (!userId) {
+    console.error('Outlook OAuth: invalid or expired state nonce');
+    return res.redirect('/?outlook=error&msg=Invalid+or+expired+state');
   }
 
   try {
