@@ -2,6 +2,26 @@ const express = require('express');
 const router = express.Router();
 const { requireAuth, requireRole, sb } = require('../middleware/auth');
 
+// Lista utenti assegnabili (per i dropdown task)
+router.get('/members', requireAuth, async (req, res) => {
+  try {
+    const role = req.profile.role;
+    let query = sb.from('profiles').select('id, full_name, role').order('full_name');
+    if (role === 'manager') {
+      const { data: agents } = await sb.from('profiles').select('id').eq('manager_id', req.profile.id);
+      const ids = [req.profile.id, ...(agents || []).map(a => a.id)];
+      query = query.in('id', ids);
+    } else if (role !== 'admin') {
+      query = query.eq('id', req.profile.id);
+    }
+    const { data, error } = await query;
+    if (error) throw error;
+    res.json({ members: data || [] });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.get('/', requireAuth, requireRole('admin', 'manager'), async (req, res) => {
   try {
     let query = sb.from('profiles').select('*').order('full_name');

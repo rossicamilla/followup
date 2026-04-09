@@ -1,9 +1,109 @@
 import { useState, useEffect } from 'react'
 import { api } from '../../lib/api'
 import EmailDraftModal from '../ai/EmailDraftModal'
+import TaskEditModal from './TaskEditModal'
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core'
+import {
+  arrayMove,
+  SortableContext,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 
 const TYPE_BADGE = { chiamata: 'bg-blue-50 text-blue-700', email: 'bg-brand-50 text-brand-700', meeting: 'bg-purple-50 text-purple-700', task: 'bg-warm-100 text-warm-600' }
 const PRI_BADGE  = { alta: 'bg-red-50 text-red-600', media: 'bg-amber-50 text-amber-700', bassa: 'bg-brand-50 text-brand-600' }
+
+function SortableTask({ task, today, onToggle, onDelete, onDraft, onSync, onEdit }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id })
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.4 : 1,
+  }
+  const overdue = !task.completed && task.due_date && task.due_date < today
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className="flex items-start gap-3 px-6 py-3.5 hover:bg-warm-50 transition-colors group border-b border-warm-100 last:border-b-0"
+    >
+      {/* Drag handle */}
+      <div
+        {...attributes}
+        {...listeners}
+        className="mt-0.5 flex-shrink-0 cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-100 transition-opacity touch-none"
+      >
+        <svg viewBox="0 0 8 14" fill="currentColor" className="w-2.5 h-3.5 text-warm-300">
+          <circle cx="2" cy="2" r="1.2"/><circle cx="6" cy="2" r="1.2"/>
+          <circle cx="2" cy="7" r="1.2"/><circle cx="6" cy="7" r="1.2"/>
+          <circle cx="2" cy="12" r="1.2"/><circle cx="6" cy="12" r="1.2"/>
+        </svg>
+      </div>
+
+      {/* Checkbox */}
+      <button onClick={() => onToggle(task.id, !task.completed)}
+        className={`mt-0.5 w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center transition-all ${
+          task.completed ? 'bg-brand-500 border-brand-500' : 'border-warm-300 hover:border-brand-400'
+        }`}>
+        {task.completed && <svg viewBox="0 0 10 10" fill="none" className="w-2.5 h-2.5"><path d="M2 5l2.5 2.5L8 3" stroke="#fff" strokeWidth="1.5"/></svg>}
+      </button>
+
+      {/* Content */}
+      <div className="flex-1 min-w-0">
+        <div className={`text-sm font-500 ${task.completed ? 'text-warm-300 line-through' : overdue ? 'text-red-600' : 'text-warm-900'}`}>
+          {task.urgent && !task.completed && <span className="mr-1">⚡</span>}
+          {task.title}
+        </div>
+        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+          {task.type && <Badge text={task.type} cls={TYPE_BADGE[task.type]} />}
+          {task.priority && <Badge text={task.priority} cls={PRI_BADGE[task.priority]} />}
+          {task.due_date && (
+            <span className={`text-2xs font-500 ${overdue ? 'text-red-500' : 'text-warm-400'}`}>
+              {overdue ? '⚠ ' : ''}{new Date(task.due_date + 'T12:00:00').toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })}
+            </span>
+          )}
+          {task.assigned_to && <span className="text-2xs text-warm-400">{task.assigned_to.full_name}</span>}
+        </div>
+      </div>
+
+      {/* Actions */}
+      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+        <button onClick={() => onEdit(task)} title="Modifica / Riassegna"
+          className="text-warm-300 hover:text-warm-600 p-1 rounded hover:bg-warm-100 transition-colors">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5">
+            <path d="M11 2l3 3-8 8H3v-3l8-8z"/>
+          </svg>
+        </button>
+        <button onClick={() => onDraft(task)} title="Bozza email AI"
+          className="text-xs text-warm-400 hover:text-brand-500 p-1 rounded hover:bg-brand-50 transition-colors">✉</button>
+        {task.due_date && (
+          <button onClick={() => onSync(task)} title="Sincronizza con Outlook"
+            className="text-warm-300 hover:text-blue-500 p-1 rounded hover:bg-blue-50 transition-colors">
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5">
+              <rect x="1.5" y="3" width="13" height="10" rx="1.5"/>
+              <path d="M1.5 6h13M5.5 6v7"/>
+            </svg>
+          </button>
+        )}
+        <button onClick={() => onDelete(task.id)}
+          className="text-warm-300 hover:text-red-500 p-1 rounded hover:bg-red-50 transition-colors">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5">
+            <path d="M4 4l8 8M12 4l-8 8"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  )
+}
 
 export default function Tasks() {
   const [tasks, setTasks] = useState([])
@@ -13,6 +113,12 @@ export default function Tasks() {
   const [filterType, setFilterType] = useState('')
   const [newTitle, setNewTitle] = useState('')
   const [draftTask, setDraftTask] = useState(null)
+  const [editTask, setEditTask] = useState(null)
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } })
+  )
 
   const load = () => {
     api('/api/tasks')
@@ -49,6 +155,39 @@ export default function Tasks() {
     load()
   }
 
+  async function syncToOutlook(task) {
+    try {
+      await api('/api/outlook/sync-task', { method: 'POST', body: { task_id: task.id } })
+      alert('Task sincronizzato con Outlook!')
+    } catch (e) {
+      if (e.message?.includes('non trovato')) {
+        alert('Prima connetti il tuo account Outlook dalla barra laterale.')
+      } else {
+        alert('Errore sincronizzazione: ' + e.message)
+      }
+    }
+  }
+
+  function handleDragEnd({ active, over }) {
+    if (!over || active.id === over.id) return
+    // reorder only within the filtered view — update full tasks array
+    setTasks(prev => {
+      const ids = filtered.map(t => t.id)
+      const oldIdx = ids.indexOf(active.id)
+      const newIdx = ids.indexOf(over.id)
+      const reorderedFiltered = arrayMove(ids, oldIdx, newIdx)
+      // rebuild full list: replace filtered items in their original positions
+      const nonFiltered = prev.filter(t => !ids.includes(t.id))
+      // interleave: put reordered filtered back in original filtered positions within prev
+      const result = [...prev]
+      const filteredPositions = prev.reduce((acc, t, i) => { if (ids.includes(t.id)) acc.push(i); return acc }, [])
+      reorderedFiltered.forEach((id, i) => {
+        result[filteredPositions[i]] = prev.find(t => t.id === id)
+      })
+      return result
+    })
+  }
+
   const today = new Date().toISOString().split('T')[0]
 
   return (
@@ -63,9 +202,9 @@ export default function Tasks() {
         </div>
         <div className="flex gap-2 flex-wrap">
           {[
-            { value: filterStatus, set: setFilterStatus, opts: [['','Tutti'],['false','Aperti'],['true','Completati']], placeholder:'Stato' },
-            { value: filterPri, set: setFilterPri, opts: [['','Priorità'],['alta','Alta'],['media','Media'],['bassa','Bassa']], placeholder:'Priorità' },
-            { value: filterType, set: setFilterType, opts: [['','Tipo'],['task','Task'],['chiamata','Chiamata'],['email','Email'],['meeting','Meeting']], placeholder:'Tipo' },
+            { value: filterStatus, set: setFilterStatus, opts: [['','Tutti'],['false','Aperti'],['true','Completati']] },
+            { value: filterPri, set: setFilterPri, opts: [['','Priorità'],['alta','Alta'],['media','Media'],['bassa','Bassa']] },
+            { value: filterType, set: setFilterType, opts: [['','Tipo'],['task','Task'],['chiamata','Chiamata'],['email','Email'],['meeting','Meeting']] },
           ].map((f, i) => (
             <select key={i} value={f.value} onChange={e => f.set(e.target.value)}
               className="text-xs border border-warm-200 rounded-lg px-3 py-1.5 bg-white text-warm-700 font-medium focus:outline-none focus:border-brand-400">
@@ -93,52 +232,24 @@ export default function Tasks() {
         )}
 
         {!loading && filtered.length > 0 && (
-          <div className="divide-y divide-warm-100">
-            {filtered.map(t => {
-              const overdue = !t.completed && t.due_date && t.due_date < today
-              return (
-                <div key={t.id} className="flex items-start gap-3 px-6 py-3.5 hover:bg-warm-50 transition-colors group">
-                  {/* Checkbox */}
-                  <button onClick={() => toggle(t.id, !t.completed)}
-                    className={`mt-0.5 w-4 h-4 rounded border flex-shrink-0 flex items-center justify-center transition-all ${
-                      t.completed ? 'bg-brand-500 border-brand-500' : 'border-warm-300 hover:border-brand-400'
-                    }`}>
-                    {t.completed && <svg viewBox="0 0 10 10" fill="none" className="w-2.5 h-2.5"><path d="M2 5l2.5 2.5L8 3" stroke="#fff" strokeWidth="1.5"/></svg>}
-                  </button>
-
-                  {/* Content */}
-                  <div className="flex-1 min-w-0">
-                    <div className={`text-sm font-500 ${t.completed ? 'text-warm-300 line-through' : overdue ? 'text-red-600' : 'text-warm-900'}`}>
-                      {t.urgent && !t.completed && <span className="mr-1">⚡</span>}
-                      {t.title}
-                    </div>
-                    <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                      {t.type && <Badge text={t.type} cls={TYPE_BADGE[t.type]} />}
-                      {t.priority && <Badge text={t.priority} cls={PRI_BADGE[t.priority]} />}
-                      {t.due_date && (
-                        <span className={`text-2xs font-500 ${overdue ? 'text-red-500' : 'text-warm-400'}`}>
-                          {overdue ? '⚠ ' : ''}{new Date(t.due_date + 'T12:00:00').toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })}
-                        </span>
-                      )}
-                      {t.assigned_to && <span className="text-2xs text-warm-400">{t.assigned_to.full_name}</span>}
-                    </div>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                    <button onClick={() => setDraftTask(t)} title="Bozza email AI"
-                      className="text-xs text-warm-400 hover:text-brand-500 p-1 rounded hover:bg-brand-50 transition-colors">✉</button>
-                    <button onClick={() => deleteTask(t.id)}
-                      className="text-warm-300 hover:text-red-500 p-1 rounded hover:bg-red-50 transition-colors">
-                      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5">
-                        <path d="M4 4l8 8M12 4l-8 8"/>
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={filtered.map(t => t.id)} strategy={verticalListSortingStrategy}>
+              <div className="divide-y divide-warm-100">
+                {filtered.map(t => (
+                  <SortableTask
+                    key={t.id}
+                    task={t}
+                    today={today}
+                    onToggle={toggle}
+                    onDelete={deleteTask}
+                    onDraft={setDraftTask}
+                    onSync={syncToOutlook}
+                    onEdit={setEditTask}
+                  />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
         )}
       </div>
 
@@ -153,6 +264,16 @@ export default function Tasks() {
       </form>
 
       {draftTask && <EmailDraftModal task={draftTask} onClose={() => setDraftTask(null)} />}
+      {editTask && (
+        <TaskEditModal
+          task={editTask}
+          onClose={() => setEditTask(null)}
+          onSaved={updated => {
+            setTasks(prev => prev.map(t => t.id === updated.id ? { ...t, ...updated } : t))
+            setEditTask(null)
+          }}
+        />
+      )}
     </div>
   )
 }

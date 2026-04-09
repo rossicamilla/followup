@@ -9,21 +9,35 @@ const supabase = createClient(
   process.env.SUPABASE_ANON_KEY
 );
 
-// GET todos dell'utente
+// GET tasks — admin vede tutti, manager vede il suo team, agent vede solo i suoi
 router.get('/', requireAuth, async (req, res) => {
   try {
-    const { data, error } = await supabase
+    const role = req.profile.role;
+    let query = supabase
       .from('tasks')
       .select(`
         id, title, type, due_date, urgent, completed,
-        priority, contact_id, project_id,
+        priority, contact_id, project_id, ai_generated,
         contact:contacts(name, company),
         project:projects(name),
-        assigned_to:profiles(full_name, id)
+        assigned_to:profiles!tasks_assigned_to_fkey(id, full_name, role)
       `)
-      .or(`assigned_to.eq.${req.profile.id},created_by.eq.${req.profile.id}`)
-      .order('due_date', { ascending: true });
-    
+      .order('due_date', { ascending: true, nullsLast: true });
+
+    if (role === 'admin') {
+      // admin vede tutto
+    } else if (role === 'manager') {
+      // manager vede i task suoi e del suo team
+      const { data: agents } = await supabase
+        .from('profiles').select('id').eq('manager_id', req.profile.id);
+      const teamIds = [req.profile.id, ...(agents || []).map(a => a.id)];
+      query = query.in('assigned_to', teamIds);
+    } else {
+      // agent/employee vede solo i propri
+      query = query.or(`assigned_to.eq.${req.profile.id},created_by.eq.${req.profile.id}`);
+    }
+
+    const { data, error } = await query;
     if (error) throw error;
     res.json({ success: true, tasks: data || [] });
   } catch (e) {

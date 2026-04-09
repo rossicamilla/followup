@@ -1,9 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const axios = require('axios');
+const Anthropic = require('@anthropic-ai/sdk');
 const { requireAuth } = require('../middleware/auth');
 const { createClient } = require('@supabase/supabase-js');
-const { syncTaskToOutlook, updateOutlookEvent } = require('../services/outlookSync');
+const { syncTaskToOutlook, updateOutlookEvent, getValidToken } = require('../services/outlookSync');
+
+const claude = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 const supabase = createClient(
   process.env.SUPABASE_URL,
@@ -122,6 +125,126 @@ router.get('/status', requireAuth, async (req, res) => {
     });
   } catch (e) {
     res.json({ connected: false, error: e.message });
+  }
+});
+
+// GET ultime email dalla inbox Outlook
+router.get('/emails', requireAuth, async (req, res) => {
+  try {
+    const token = await getValidToken(req.profile.id);
+    const limit = parseInt(req.query.limit) || 20;
+
+    const response = await axios.get(
+      `https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages?$top=${limit}&$select=id,subject,from,receivedDateTime,bodyPreview,isRead&$orderby=receivedDateTime desc`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+
+    const emails = (response.data.value || []).map(e => ({
+      id: e.id,
+      subject: e.subject,
+      from_name: e.from?.emailAddress?.name,
+      from_email: e.from?.emailAddress?.address,
+      received_at: e.receivedDateTime,
+      preview: e.bodyPreview?.slice(0, 200),
+      is_read: e.isRead
+    }));
+
+    res.json({ emails });
+  } catch (e) {
+    if (e.message?.includes('Token Outlook non trovato')) {
+      return res.json({ emails: [], not_connected: true });
+    }
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/outlook/process-emails — legge le ultime email e le analizza con Claude
+// Crea task/contatti automaticamente
+router.post('/process-emails', requireAuth, async (req, res) => {
+  try {
+    const token = await getValidToken(req.profile.id);
+
+    // Leggi le ultime 10 email non lette
+    const response = await axios.get(
+      'https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages?$top=10&$select=id,subject,from,receivedDateTime,body,bodyPreview&$filter=isRead eq false&$orderby=receivedDateTime desc',
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+
+    const emails = response.data.value || [];
+    if (!emails.length) return res.json({ processed: 0, message: 'Nessuna email non letta' });
+
+    const results = [];
+
+    for (const email of emails) {
+      const body = email.body?.content?.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 800);
+      const fromEmail = email.from?.emailAddress?.address;
+      const fromName = email.from?.emailAddress?.name;
+
+      // Analisi Claude
+      const message = await claude.messages.create({
+        model: 'claude-sonnet-4-6',
+        max_tokens: 600,
+        messages: [{
+          role: 'user',
+          content: `Sei un assistente CRM per un'azienda italiana di distribuzione alimentare B2B.
+Analizza questa email e restituisci SOLO JSON valido.
+
+DA: ${fromName} <${fromEmail}>
+OGGETTO: ${email.subject}
+TESTO: ${body}
+
+{
+  "relevant": true/false,
+  "contact_name": "nome mittente o null",
+  "company": "azienda mittente se rilevabile o null",
+  "intent": "cosa vuole il mittente in max 10 parole",
+  "urgency": "alta | media | bassa",
+  "suggested_stage": "new | warm | hot | won | null",
+  "tasks": [
+    { "text": "azione da fare", "type": "email | chiamata | meeting | task", "when": "oggi | domani | questa settimana", "urgent": true/false }
+  ],
+  "should_reply": true/false,
+  "reply_hint": "hint per risposta o null"
+}`
+        }]
+      });
+
+      const raw = message.content?.[0]?.text || '';
+      let analysis;
+      try { analysis = JSON.parse(raw.replace(/```json|```/g, '').trim()); }
+      catch { continue; }
+
+      if (!analysis.relevant) continue;
+
+      // Crea task se ci sono azioni da fare
+      if (analysis.tasks?.length) {
+        const supabase = require('../middleware/auth').sb;
+        const tasksToInsert = analysis.tasks.map(t => ({
+          title: t.text,
+          type: t.type || 'email',
+          urgent: t.urgent || false,
+          priority: analysis.urgency === 'alta' ? 'alta' : 'media',
+          assigned_to: req.profile.id,
+          created_by: req.profile.id,
+          ai_generated: true
+        }));
+        await supabase.from('tasks').insert(tasksToInsert);
+      }
+
+      results.push({
+        email_id: email.id,
+        subject: email.subject,
+        from: fromName,
+        analysis
+      });
+    }
+
+    res.json({ processed: results.length, results });
+  } catch (e) {
+    if (e.message?.includes('Token Outlook non trovato')) {
+      return res.status(400).json({ error: 'Outlook non connesso', not_connected: true });
+    }
+    res.status(500).json({ error: e.message });
   }
 });
 

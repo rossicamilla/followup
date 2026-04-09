@@ -8,16 +8,48 @@ import Tasks from './components/tasks/Tasks'
 import Projects from './components/projects/Projects'
 import AINote from './components/ai/AINote'
 import Team from './components/team/Team'
+import Contacts from './components/contacts/Contacts'
 
 export const AppContext = createContext(null)
 export const useApp = () => useContext(AppContext)
 
+function Toast({ msg, type, onDone }) {
+  useEffect(() => {
+    const t = setTimeout(onDone, 3500)
+    return () => clearTimeout(t)
+  }, [])
+  return (
+    <div className={`fixed top-4 left-1/2 -translate-x-1/2 z-[100] px-5 py-3 rounded-xl shadow-lg text-sm font-600 flex items-center gap-2 transition-all
+      ${type === 'success' ? 'bg-brand-500 text-white' : 'bg-red-500 text-white'}`}>
+      {type === 'success'
+        ? <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4"><path d="M3 8l3.5 3.5L13 5"/></svg>
+        : <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+      }
+      {msg}
+    </div>
+  )
+}
+
 export default function App() {
   const [session, setSession] = useState(null)
   const [profile, setProfile] = useState(null)
-  const [view, setView] = useState('pipeline')
+  const [view, setView] = useState('tasks')
   const [team, setTeam] = useState([])
   const [loading, setLoading] = useState(true)
+  const [toast, setToast] = useState(null)
+
+  // Gestisci redirect Outlook (?outlook=success|error)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const ol = params.get('outlook')
+    if (ol === 'success') {
+      setToast({ msg: 'Outlook connesso con successo!', type: 'success' })
+      window.history.replaceState({}, '', window.location.pathname)
+    } else if (ol === 'error') {
+      setToast({ msg: 'Errore connessione Outlook. Riprova.', type: 'error' })
+      window.history.replaceState({}, '', window.location.pathname)
+    }
+  }, [])
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -47,12 +79,14 @@ export default function App() {
     pipeline: <Pipeline />,
     tasks: <Tasks />,
     projects: <Projects />,
+    contacts: <Contacts />,
     ai: <AINote />,
     team: <Team />,
   }
 
   return (
     <AppContext.Provider value={{ profile, session, view, setView, team, setTeam }}>
+      {toast && <Toast msg={toast.msg} type={toast.type} onDone={() => setToast(null)} />}
       <Layout>{views[view]}</Layout>
     </AppContext.Provider>
   )

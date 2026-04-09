@@ -1,9 +1,83 @@
 import { useState, useEffect } from 'react'
 import { api } from '../../lib/api'
 import { useApp } from '../../App'
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+} from '@dnd-kit/core'
+import {
+  arrayMove,
+  SortableContext,
+  useSortable,
+  rectSortingStrategy,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
 
 const STATUS = { active: { label: 'Attivo', cls: 'bg-brand-50 text-brand-600' }, on_hold: { label: 'In pausa', cls: 'bg-amber-50 text-amber-700' }, completed: { label: 'Completato', cls: 'bg-blue-50 text-blue-700' }, cancelled: { label: 'Annullato', cls: 'bg-warm-100 text-warm-500' } }
 const PRI_DOT = { urgent: 'bg-red-500', high: 'bg-amber-400', medium: 'bg-brand-500', low: 'bg-warm-300' }
+
+function SortableProjectCard({ project, onOpen }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: project.id })
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }
+
+  const tasks = project.project_tasks || []
+  const done = tasks.filter(t => t.status === 'done').length
+  const progress = tasks.length ? Math.round(done / tasks.length * 100) : 0
+  const s = STATUS[project.status] || STATUS.active
+
+  return (
+    <div ref={setNodeRef} style={style} className="relative group/card">
+      {/* Drag handle */}
+      <div
+        {...attributes}
+        {...listeners}
+        className="absolute top-3 right-3 cursor-grab active:cursor-grabbing opacity-0 group-hover/card:opacity-100 transition-opacity touch-none z-10"
+      >
+        <svg viewBox="0 0 8 14" fill="currentColor" className="w-2.5 h-3.5 text-warm-300">
+          <circle cx="2" cy="2" r="1.2"/><circle cx="6" cy="2" r="1.2"/>
+          <circle cx="2" cy="7" r="1.2"/><circle cx="6" cy="7" r="1.2"/>
+          <circle cx="2" cy="12" r="1.2"/><circle cx="6" cy="12" r="1.2"/>
+        </svg>
+      </div>
+
+      <div
+        onClick={() => onOpen(project.id)}
+        className="bg-white border border-warm-200 rounded-2xl p-5 cursor-pointer hover:border-warm-300 hover:shadow-md transition-all"
+      >
+        <div className="flex items-start gap-3 mb-4">
+          <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${project.status === 'active' ? 'bg-brand-50' : project.status === 'on_hold' ? 'bg-amber-50' : 'bg-blue-50'}`}>
+            <svg viewBox="0 0 20 20" fill="none" stroke={project.status === 'active' ? '#1D9E75' : project.status === 'on_hold' ? '#D97706' : '#3B82F6'} strokeWidth="1.6" className="w-4.5 h-4.5">
+              <path d="M9 5H7a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h0a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h0a2 2 0 0 1 2 2"/>
+            </svg>
+          </div>
+          <div className="flex-1 min-w-0 pr-4">
+            <div className="text-sm font-700 text-warm-900 leading-tight">{project.name}</div>
+          </div>
+          <div className={`w-2 h-2 rounded-full flex-shrink-0 mt-1 ${PRI_DOT[project.priority] || 'bg-warm-200'}`} />
+        </div>
+
+        {tasks.length > 0 && (
+          <div className="mb-3">
+            <div className="h-1 bg-warm-100 rounded-full overflow-hidden">
+              <div className="h-full bg-brand-500 rounded-full transition-all" style={{ width: `${progress}%` }} />
+            </div>
+            <div className="text-xs text-warm-400 mt-1">{done}/{tasks.length} task · {progress}%</div>
+          </div>
+        )}
+
+        <div className="flex items-center gap-2">
+          <span className={`text-2xs font-600 px-2 py-0.5 rounded-full ${s.cls}`}>{s.label}</span>
+          {project.due_date && <span className="text-xs text-warm-400 ml-auto">{new Date(project.due_date).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })}</span>}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export default function Projects() {
   const { profile } = useApp()
@@ -12,6 +86,11 @@ export default function Projects() {
   const [selected, setSelected] = useState(null)
   const [projectDetail, setProjectDetail] = useState(null)
   const [tab, setTab] = useState('overview')
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } })
+  )
 
   const load = () => api('/api/projects').then(d => setProjects(d.projects || [])).catch(() => {}).finally(() => setLoading(false))
   useEffect(() => { load() }, [])
@@ -28,6 +107,15 @@ export default function Projects() {
     const { project } = await api('/api/projects', { method: 'POST', body: { name, priority: 'medium', status: 'active', member_ids: [profile.id] } })
     await load()
     openProject(project.id)
+  }
+
+  function handleDragEnd({ active, over }) {
+    if (!over || active.id === over.id) return
+    setProjects(prev => {
+      const oldIndex = prev.findIndex(p => p.id === active.id)
+      const newIndex = prev.findIndex(p => p.id === over.id)
+      return arrayMove(prev, oldIndex, newIndex)
+    })
   }
 
   return (
@@ -70,44 +158,15 @@ export default function Projects() {
               ))}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {projects.map(p => {
-                const tasks = p.project_tasks || []
-                const done = tasks.filter(t => t.status === 'done').length
-                const progress = tasks.length ? Math.round(done / tasks.length * 100) : 0
-                const s = STATUS[p.status] || STATUS.active
-                return (
-                  <div key={p.id} onClick={() => openProject(p.id)}
-                    className="bg-white border border-warm-200 rounded-2xl p-5 cursor-pointer hover:border-warm-300 hover:shadow-md transition-all">
-                    <div className="flex items-start gap-3 mb-4">
-                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 ${p.status === 'active' ? 'bg-brand-50' : p.status === 'on_hold' ? 'bg-amber-50' : 'bg-blue-50'}`}>
-                        <svg viewBox="0 0 20 20" fill="none" stroke={p.status === 'active' ? '#1D9E75' : p.status === 'on_hold' ? '#D97706' : '#3B82F6'} strokeWidth="1.6" className="w-4.5 h-4.5">
-                          <path d="M9 5H7a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2M9 5a2 2 0 0 0 2 2h0a2 2 0 0 0 2-2M9 5a2 2 0 0 1 2-2h0a2 2 0 0 1 2 2"/>
-                        </svg>
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-700 text-warm-900 leading-tight">{p.name}</div>
-                      </div>
-                      <div className={`w-2 h-2 rounded-full flex-shrink-0 mt-1 ${PRI_DOT[p.priority] || 'bg-warm-200'}`} />
-                    </div>
-
-                    {tasks.length > 0 && (
-                      <div className="mb-3">
-                        <div className="h-1 bg-warm-100 rounded-full overflow-hidden">
-                          <div className="h-full bg-brand-500 rounded-full transition-all" style={{ width: `${progress}%` }} />
-                        </div>
-                        <div className="text-xs text-warm-400 mt-1">{done}/{tasks.length} task · {progress}%</div>
-                      </div>
-                    )}
-
-                    <div className="flex items-center gap-2">
-                      <span className={`text-2xs font-600 px-2 py-0.5 rounded-full ${s.cls}`}>{s.label}</span>
-                      {p.due_date && <span className="text-xs text-warm-400 ml-auto">{new Date(p.due_date).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })}</span>}
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+              <SortableContext items={projects.map(p => p.id)} strategy={rectSortingStrategy}>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {projects.map(p => (
+                    <SortableProjectCard key={p.id} project={p} onOpen={openProject} />
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
           </>
         )}
       </div>
@@ -171,38 +230,98 @@ function ProjectOverview({ p }) {
   )
 }
 
-function ProjectTasks({ tasks }) {
+function SortableProjectTask({ task }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id })
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }
   return (
-    <div className="space-y-2">
-      {tasks.length === 0 && <p className="text-sm text-warm-400">Nessun task</p>}
-      {tasks.map(t => (
-        <div key={t.id} className={`flex items-center gap-3 p-3 rounded-xl border ${t.status === 'done' ? 'bg-warm-50 border-warm-100' : 'bg-white border-warm-200'}`}>
-          <div className={`w-3.5 h-3.5 rounded border-2 flex-shrink-0 ${t.status === 'done' ? 'bg-brand-500 border-brand-500' : 'border-warm-300'}`}/>
-          <span className={`flex-1 text-sm ${t.status === 'done' ? 'text-warm-400 line-through' : 'text-warm-900 font-500'}`}>{t.title}</span>
-          {t.assignee && <span className="text-xs text-warm-400">{t.assignee.full_name?.split(' ')[0]}</span>}
-        </div>
-      ))}
+    <div ref={setNodeRef} style={style} className={`flex items-center gap-3 p-3 rounded-xl border group/ptask ${task.status === 'done' ? 'bg-warm-50 border-warm-100' : 'bg-white border-warm-200'}`}>
+      <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing opacity-0 group-hover/ptask:opacity-100 transition-opacity touch-none flex-shrink-0">
+        <svg viewBox="0 0 8 14" fill="currentColor" className="w-2 h-3 text-warm-300">
+          <circle cx="2" cy="2" r="1.2"/><circle cx="6" cy="2" r="1.2"/>
+          <circle cx="2" cy="7" r="1.2"/><circle cx="6" cy="7" r="1.2"/>
+          <circle cx="2" cy="12" r="1.2"/><circle cx="6" cy="12" r="1.2"/>
+        </svg>
+      </div>
+      <div className={`w-3.5 h-3.5 rounded border-2 flex-shrink-0 ${task.status === 'done' ? 'bg-brand-500 border-brand-500' : 'border-warm-300'}`}/>
+      <span className={`flex-1 text-sm ${task.status === 'done' ? 'text-warm-400 line-through' : 'text-warm-900 font-500'}`}>{task.title}</span>
+      {task.assignee && <span className="text-xs text-warm-400">{task.assignee.full_name?.split(' ')[0]}</span>}
     </div>
   )
 }
 
-function ProjectNotes({ notes }) {
-  const typeColors = { update: 'bg-blue-50 text-blue-700', meeting: 'bg-brand-50 text-brand-600', call: 'bg-purple-50 text-purple-700', decision: 'bg-amber-50 text-amber-700', risk: 'bg-red-50 text-red-600' }
+function ProjectTasks({ tasks: initialTasks }) {
+  const [tasks, setTasks] = useState(initialTasks)
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } })
+  )
+  function handleDragEnd({ active, over }) {
+    if (!over || active.id === over.id) return
+    setTasks(prev => {
+      const oldIndex = prev.findIndex(t => t.id === active.id)
+      const newIndex = prev.findIndex(t => t.id === over.id)
+      return arrayMove(prev, oldIndex, newIndex)
+    })
+  }
   return (
-    <div className="space-y-3">
-      {notes.length === 0 && <p className="text-sm text-warm-400">Nessuna nota</p>}
-      {notes.map(n => (
-        <div key={n.id} className="bg-white border border-warm-200 rounded-xl p-4">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-xs font-700 text-warm-900">{n.author?.full_name}</span>
-            <span className={`text-2xs font-600 px-2 py-0.5 rounded-full ${typeColors[n.note_type] || ''}`}>{n.note_type}</span>
-            <span className="text-2xs text-warm-400 ml-auto">{new Date(n.created_at).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })}</span>
-          </div>
-          <p className="text-sm text-warm-700 leading-relaxed">{n.content}</p>
-          {n.ai_summary && <p className="text-xs text-warm-500 border-l-2 border-brand-200 pl-3 mt-2 leading-relaxed">{n.ai_summary}</p>}
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+      <SortableContext items={tasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
+        <div className="space-y-2">
+          {tasks.length === 0 && <p className="text-sm text-warm-400">Nessun task</p>}
+          {tasks.map(t => <SortableProjectTask key={t.id} task={t} />)}
         </div>
-      ))}
+      </SortableContext>
+    </DndContext>
+  )
+}
+
+function SortableNote({ note, typeColors }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: note.id })
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }
+  return (
+    <div ref={setNodeRef} style={style} className="bg-white border border-warm-200 rounded-xl p-4 group/note">
+      <div className="flex items-center gap-2 mb-2">
+        <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing opacity-0 group-hover/note:opacity-100 transition-opacity touch-none flex-shrink-0">
+          <svg viewBox="0 0 8 14" fill="currentColor" className="w-2 h-3 text-warm-300">
+            <circle cx="2" cy="2" r="1.2"/><circle cx="6" cy="2" r="1.2"/>
+            <circle cx="2" cy="7" r="1.2"/><circle cx="6" cy="7" r="1.2"/>
+            <circle cx="2" cy="12" r="1.2"/><circle cx="6" cy="12" r="1.2"/>
+          </svg>
+        </div>
+        <span className="text-xs font-700 text-warm-900">{note.author?.full_name}</span>
+        <span className={`text-2xs font-600 px-2 py-0.5 rounded-full ${typeColors[note.note_type] || ''}`}>{note.note_type}</span>
+        <span className="text-2xs text-warm-400 ml-auto">{new Date(note.created_at).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })}</span>
+      </div>
+      <p className="text-sm text-warm-700 leading-relaxed">{note.content}</p>
+      {note.ai_summary && <p className="text-xs text-warm-500 border-l-2 border-brand-200 pl-3 mt-2 leading-relaxed">{note.ai_summary}</p>}
     </div>
+  )
+}
+
+function ProjectNotes({ notes: initialNotes }) {
+  const [notes, setNotes] = useState(initialNotes)
+  const typeColors = { update: 'bg-blue-50 text-blue-700', meeting: 'bg-brand-50 text-brand-600', call: 'bg-purple-50 text-purple-700', decision: 'bg-amber-50 text-amber-700', risk: 'bg-red-50 text-red-600' }
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } })
+  )
+  function handleDragEnd({ active, over }) {
+    if (!over || active.id === over.id) return
+    setNotes(prev => {
+      const oldIndex = prev.findIndex(n => n.id === active.id)
+      const newIndex = prev.findIndex(n => n.id === over.id)
+      return arrayMove(prev, oldIndex, newIndex)
+    })
+  }
+  return (
+    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+      <SortableContext items={notes.map(n => n.id)} strategy={verticalListSortingStrategy}>
+        <div className="space-y-3">
+          {notes.length === 0 && <p className="text-sm text-warm-400">Nessuna nota</p>}
+          {notes.map(n => <SortableNote key={n.id} note={n} typeColors={typeColors} />)}
+        </div>
+      </SortableContext>
+    </DndContext>
   )
 }
 

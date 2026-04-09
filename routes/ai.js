@@ -10,8 +10,10 @@ const supabase = createClient(
   process.env.SUPABASE_ANON_KEY
 );
 
+// Analisi nota testuale o vocale
+// Supporta: contact_id (collega a contatto esistente), assignee_id, project_id (nota progetto)
 router.post('/analyze', requireAuth, async (req, res) => {
-  const { note, assignee_name } = req.body;
+  const { note, assignee_name, contact_id, assignee_id, project_id } = req.body;
   if (!note || note.trim().length < 5) {
     return res.status(400).json({ error: 'Nota troppo corta' });
   }
@@ -20,21 +22,27 @@ router.post('/analyze', requireAuth, async (req, res) => {
 
   try {
     const message = await claude.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-6',
       max_tokens: 1024,
       messages: [{
         role: 'user',
-        content: `Sei un assistente CRM per imprenditori italiani nel settore food/distribuzione B2B.
-Analizza questa nota e restituisci SOLO un oggetto JSON valido, senza testo aggiuntivo.
+        content: `Sei un assistente CRM per un'azienda italiana di distribuzione alimentare B2B (Confluencia).
+Analizza questa nota vocale/testuale e restituisci SOLO un oggetto JSON valido, senza testo aggiuntivo.
 
 NOTA: "${note}"
 ASSEGNARE I TASK A: "${assignedTo}"
 
+Determina il "destination" in base al contenuto:
+- "contact": se parla di un cliente/prospect specifico con cui c'è un'interazione commerciale
+- "task": se è un promemoria o azione generica non legata a un contatto specifico
+- "project_note": se è un aggiornamento su un progetto interno
+
 JSON richiesto:
 {
+  "destination": "contact | task | project_note",
   "contact_name": "nome cognome o null",
   "company": "nome azienda o null",
-  "intent": "frase breve che descrive l'intento del contatto",
+  "intent": "frase breve che descrive l'intento",
   "urgency": "alta | media | bassa",
   "next_action_type": "chiamata | email | meeting | task",
   "key_info": "informazione chiave emersa (max 15 parole)",
@@ -44,8 +52,7 @@ JSON richiesto:
       "text": "task specifico e azionabile",
       "type": "chiamata | email | meeting | task",
       "when": "oggi | domani | questa settimana | entro 3 giorni | entro venerdì",
-      "urgent": true/false,
-      "assigned_to_name": "${assignedTo}"
+      "urgent": true
     }
   ],
   "ai_advice": "consiglio pratico max 2 frasi, tono diretto"
@@ -57,16 +64,16 @@ JSON richiesto:
     const clean = raw.replace(/```json|```/g, '').trim();
     const parsed = JSON.parse(clean);
 
-    // Salva i task nel database se esistono
+    // Auto-salva task nel DB
     if (parsed.tasks && parsed.tasks.length > 0) {
-      const tasksToInsert = parsed.tasks.map((t) => ({
+      const tasksToInsert = parsed.tasks.map(t => ({
         title: t.text,
         type: t.type,
-        due_date: t.when ? calculateDueDate(t.when) : null,
+        due_date: calculateDueDate(t.when),
         urgent: t.urgent || false,
         priority: parsed.urgency === 'alta' ? 'alta' : parsed.urgency === 'media' ? 'media' : 'bassa',
-        contact_id: null, // sarà collegato manualmente se necessario
-        assigned_to: null, // sarà assegnato manualmente
+        contact_id: contact_id || null,
+        assigned_to: assignee_id || req.profile.id,
         created_by: req.profile.id,
         ai_generated: true
       }));
@@ -76,11 +83,7 @@ JSON richiesto:
         .insert(tasksToInsert)
         .select();
 
-      if (dbError) {
-        console.error('Errore salvataggio task:', dbError.message);
-      } else {
-        parsed.saved_tasks = savedTasks;
-      }
+      if (!dbError) parsed.saved_tasks = savedTasks;
     }
 
     res.json({ success: true, analysis: parsed });
@@ -90,12 +93,80 @@ JSON richiesto:
   }
 });
 
+// Salva il risultato dell'analisi vocale in modo completo:
+// Crea/aggiorna contatto, collega task, eventualmente crea nota progetto
+router.post('/save-voice', requireAuth, async (req, res) => {
+  const { analysis, contact_id, project_id, assignee_id, original_note } = req.body;
+  if (!analysis) return res.status(400).json({ error: 'Analisi mancante' });
+
+  const ownerId = assignee_id || req.profile.id;
+  const results = { contact: null, tasks: [], project_note: null };
+
+  try {
+    // 1. Crea/aggiorna contatto se destination === 'contact'
+    let finalContactId = contact_id || null;
+    if (analysis.destination === 'contact' && !contact_id && analysis.contact_name) {
+      const { data, error } = await supabase.from('contacts').insert({
+        name: analysis.contact_name,
+        company: analysis.company || null,
+        stage: analysis.suggested_stage || 'new',
+        owner_id: ownerId,
+        created_by: req.profile.id,
+        notes: original_note || null
+      }).select().single();
+      if (!error) { results.contact = data; finalContactId = data.id; }
+    } else if (contact_id) {
+      // Aggiorna note del contatto esistente con la nota vocale
+      if (original_note) {
+        await supabase.from('contacts')
+          .update({ notes: original_note })
+          .eq('id', contact_id);
+      }
+      results.contact = { id: contact_id };
+    }
+
+    // 2. Salva task (collega al contatto se presente)
+    if (analysis.tasks && analysis.tasks.length > 0) {
+      const tasksToInsert = analysis.tasks.map(t => ({
+        title: t.text,
+        type: t.type || 'task',
+        due_date: calculateDueDate(t.when),
+        urgent: t.urgent || false,
+        priority: analysis.urgency === 'alta' ? 'alta' : analysis.urgency === 'media' ? 'media' : 'bassa',
+        contact_id: finalContactId,
+        assigned_to: ownerId,
+        created_by: req.profile.id,
+        ai_generated: true
+      }));
+      const { data: savedTasks } = await supabase.from('tasks').insert(tasksToInsert).select();
+      results.tasks = savedTasks || [];
+    }
+
+    // 3. Crea nota progetto se destination === 'project_note'
+    if (analysis.destination === 'project_note' && project_id) {
+      const { data: note } = await supabase.from('project_notes').insert({
+        project_id,
+        author_id: req.profile.id,
+        note_type: analysis.next_action_type === 'meeting' ? 'meeting' : 'update',
+        content: original_note,
+        ai_summary: analysis.key_info || null
+      }).select().single();
+      results.project_note = note;
+    }
+
+    res.json({ success: true, results });
+  } catch (e) {
+    console.error('Errore save-voice:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.post('/suggest-followup', requireAuth, async (req, res) => {
   const { contact_name, company, stage, last_interaction, open_tasks } = req.body;
 
   try {
     const message = await claude.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-6',
       max_tokens: 512,
       messages: [{
         role: 'user',
@@ -125,34 +196,19 @@ Rispondi in JSON:
   }
 });
 
-// Utility: calcola due_date da testo come "oggi", "domani", etc.
 function calculateDueDate(whenText) {
   const today = new Date();
-  
   if (!whenText) return null;
-  
   const text = whenText.toLowerCase();
-  
   if (text === 'oggi') return today.toISOString().split('T')[0];
   if (text === 'domani') {
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    return tomorrow.toISOString().split('T')[0];
+    const d = new Date(today); d.setDate(d.getDate() + 1); return d.toISOString().split('T')[0];
   }
-  if (text.includes('questa settimana')) {
-    const friday = new Date(today);
-    friday.setDate(friday.getDate() + (5 - today.getDay() || -2));
-    return friday.toISOString().split('T')[0];
+  if (text.includes('questa settimana') || text.includes('venerdì')) {
+    const d = new Date(today); d.setDate(d.getDate() + (5 - today.getDay() || 5)); return d.toISOString().split('T')[0];
   }
   if (text.includes('3 giorni')) {
-    const in3days = new Date(today);
-    in3days.setDate(in3days.getDate() + 3);
-    return in3days.toISOString().split('T')[0];
-  }
-  if (text.includes('venerdì')) {
-    const friday = new Date(today);
-    friday.setDate(friday.getDate() + (5 - today.getDay() || -2));
-    return friday.toISOString().split('T')[0];
+    const d = new Date(today); d.setDate(d.getDate() + 3); return d.toISOString().split('T')[0];
   }
   return null;
 }

@@ -1,6 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const { requireAuth, requireRole, sb } = require('../middleware/auth');
+const Anthropic = require('@anthropic-ai/sdk');
+const claude = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 router.get('/', requireAuth, async (req, res) => {
   try {
@@ -146,6 +148,114 @@ router.patch('/:id/tasks/:taskId', requireAuth, async (req, res) => {
     const { data, error } = await sb.from('tasks').update(updates).eq('id', taskId).select().single();
     if (error) throw error;
     res.json({ task: data });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/contacts/:id/timeline — tutti gli eventi del contatto in ordine cronologico
+router.get('/:id/timeline', requireAuth, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const [contactRes, tasksRes, activityRes] = await Promise.all([
+      sb.from('contacts').select('*, owner:profiles!contacts_owner_id_fkey(full_name)').eq('id', id).single(),
+      sb.from('tasks').select('*, assignee:profiles!tasks_assigned_to_fkey(full_name), creator:profiles!tasks_created_by_fkey(full_name)')
+        .eq('contact_id', id).order('created_at', { ascending: true }),
+      sb.from('activity_log').select('*, actor:profiles(full_name)').eq('contact_id', id).order('created_at', { ascending: true })
+    ]);
+
+    if (contactRes.error) throw contactRes.error;
+    const contact = contactRes.data;
+    const tasks = tasksRes.data || [];
+    const activity = activityRes.data || [];
+
+    // Costruisce timeline unificata
+    const events = [];
+
+    // Creazione contatto
+    events.push({
+      type: 'created', date: contact.created_at,
+      label: 'Contatto creato',
+      detail: `Stage iniziale: ${contact.stage}`,
+      actor: contact.owner?.full_name || null,
+      icon: 'contact'
+    });
+
+    // Activity log (cambi stage, ecc.)
+    activity.forEach(a => {
+      if (a.action === 'contact_created') return; // già mostrato
+      events.push({
+        type: 'activity', date: a.created_at,
+        label: a.action === 'stage_changed' ? `Stage → ${a.payload?.to || ''}` : a.action,
+        detail: a.payload ? JSON.stringify(a.payload) : null,
+        actor: a.actor?.full_name || null,
+        icon: 'activity'
+      });
+    });
+
+    // Task
+    tasks.forEach(t => {
+      events.push({
+        type: 'task_created', date: t.created_at,
+        label: `Task: ${t.title}`,
+        detail: [t.type, t.due_date && `scadenza ${new Date(t.due_date + 'T12:00:00').toLocaleDateString('it-IT')}`, t.urgent && '⚡ urgente'].filter(Boolean).join(' · '),
+        actor: t.creator?.full_name || null,
+        assignee: t.assignee?.full_name || null,
+        completed: t.completed,
+        completed_at: t.completed_at,
+        icon: 'task'
+      });
+      if (t.completed && t.completed_at) {
+        events.push({
+          type: 'task_done', date: t.completed_at,
+          label: `Task completato: ${t.title}`,
+          actor: t.assignee?.full_name || null,
+          icon: 'check'
+        });
+      }
+    });
+
+    // Ordina per data
+    events.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    res.json({ timeline: events, contact });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// GET /api/contacts/:id/summary — riepilogo narrativo Claude
+router.get('/:id/summary', requireAuth, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const [contactRes, tasksRes] = await Promise.all([
+      sb.from('contacts').select('*, owner:profiles!contacts_owner_id_fkey(full_name)').eq('id', id).single(),
+      sb.from('tasks').select('title, type, completed, due_date, urgent, created_at').eq('contact_id', id).order('created_at', { ascending: false }).limit(20)
+    ]);
+
+    const contact = contactRes.data;
+    const tasks = tasksRes.data || [];
+
+    const prompt = `Sei un assistente CRM italiano. Genera un riepilogo conciso (3-5 frasi) della relazione con questo contatto, in italiano, tono professionale e diretto.
+
+CONTATTO: ${contact.name}${contact.company ? ` — ${contact.company}` : ''}
+Stage pipeline: ${contact.stage}
+Responsabile: ${contact.owner?.full_name || 'non assegnato'}
+Note: ${contact.notes || 'nessuna'}
+
+STORICO TASK (${tasks.length}):
+${tasks.map(t => `- [${t.completed ? 'completato' : 'aperto'}] ${t.title}${t.due_date ? ` (scadenza ${t.due_date})` : ''}${t.urgent ? ' ⚡' : ''}`).join('\n') || 'nessun task'}
+
+Rispondi SOLO con il testo del riepilogo, senza titoli o formattazioni markdown.`;
+
+    const message = await claude.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 300,
+      messages: [{ role: 'user', content: prompt }]
+    });
+
+    const summary = message.content?.[0]?.text?.trim() || '';
+    res.json({ summary });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
