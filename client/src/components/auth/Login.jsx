@@ -41,7 +41,7 @@ export default function Login() {
             <span className="text-white font-700 text-lg leading-none">F</span>
           </div>
           <div>
-            <div className="text-white font-700 text-xl tracking-tight">FollowUp AI</div>
+            <div className="text-white font-700 text-xl tracking-tight">FollowUp</div>
             <div className="text-warm-400 text-xs">Confluencia · CRM interno</div>
           </div>
         </div>

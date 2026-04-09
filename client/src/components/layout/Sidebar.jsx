@@ -180,7 +180,7 @@ export default function Sidebar() {
           <span className="text-white text-xs font-700 leading-none">F</span>
         </div>
         <div className="flex-1 min-w-0">
-          <div className="text-sm font-600 text-warm-900 leading-tight">FollowUp AI</div>
+          <div className="text-sm font-600 text-warm-900 leading-tight">FollowUp</div>
           <div className="text-2xs text-warm-400 leading-tight mt-0.5">Confluencia</div>
         </div>
       </div>
