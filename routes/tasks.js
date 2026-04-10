@@ -1,13 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const { createClient } = require('@supabase/supabase-js');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, sb: supabase } = require('../middleware/auth');
 const { syncTaskToOutlook, updateOutlookEvent } = require('../services/outlookSync');
-
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_ANON_KEY
-);
 
 // GET tasks — admin vede tutti, manager vede il suo team, agent vede solo i suoi
 router.get('/', requireAuth, async (req, res) => {

@@ -1,12 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { createClient } = require('@supabase/supabase-js');
-const { requireAuth } = require('../middleware/auth');
-
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_ANON_KEY
-);
+const { requireAuth, sb: supabase } = require('../middleware/auth');
 
 // GET tutti i progetti
 router.get('/', requireAuth, async (req, res) => {

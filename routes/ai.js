@@ -1,14 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const Anthropic = require('@anthropic-ai/sdk');
-const { createClient } = require('@supabase/supabase-js');
-const { requireAuth } = require('../middleware/auth');
+const { requireAuth, sb: supabase } = require('../middleware/auth');
 
 const claude = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_ANON_KEY
-);
 
 // Analisi nota testuale o vocale
 // Supporta: contact_id (collega a contatto esistente), assignee_id, project_id (nota progetto)
@@ -68,7 +63,7 @@ JSON richiesto:
     if (parsed.tasks && parsed.tasks.length > 0) {
       const tasksToInsert = parsed.tasks.map(t => ({
         title: t.text,
-        type: t.type,
+        task_type: t.type,
         due_date: calculateDueDate(t.when),
         urgent: t.urgent || false,
         priority: parsed.urgency === 'alta' ? 'alta' : parsed.urgency === 'media' ? 'media' : 'bassa',
@@ -129,7 +124,7 @@ router.post('/save-voice', requireAuth, async (req, res) => {
     if (analysis.tasks && analysis.tasks.length > 0) {
       const tasksToInsert = analysis.tasks.map(t => ({
         title: t.text,
-        type: t.type || 'task',
+        task_type: t.type || 'task',
         due_date: calculateDueDate(t.when),
         urgent: t.urgent || false,
         priority: analysis.urgency === 'alta' ? 'alta' : analysis.urgency === 'media' ? 'media' : 'bassa',
