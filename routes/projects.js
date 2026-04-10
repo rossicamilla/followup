@@ -27,7 +27,7 @@ router.get('/', requireAuth, async (req, res) => {
 router.get('/admin/overview', requireAuth, requireRole('admin', 'manager'), async (req, res) => {
   try {
     const [projectsRes, tasksRes] = await Promise.all([
-      sb.from('projects').select('id, name, status, priority, due_date, owner_id, owner:profiles!projects_owner_id_fkey(full_name)'),
+      sb.from('projects').select('id, name, status, priority, due_date, owner_id, owner:profiles!owner_id(full_name)'),
       sb.from('project_tasks').select('project_id, status, priority, assigned_to, due_date')
     ]);
 
@@ -68,11 +68,11 @@ router.get('/:id', requireAuth, async (req, res) => {
       .select(`
         *,
         owner:profiles!owner_id(id, full_name, role),
-        milestones(*, created_by_profile:profiles!milestones_created_by_fkey(full_name)),
-        project_members(user_id, role, member:profiles!project_members_user_id_fkey(id, full_name, role)),
-        project_contacts(contact_id, role, contact:contacts!project_contacts_contact_id_fkey(id, name, company, stage)),
-        project_notes(*, author:profiles!project_notes_created_by_fkey(full_name)),
-        project_tasks(*, assignee:profiles!project_tasks_assigned_to_fkey(full_name))
+        milestones(*, created_by_profile:profiles!created_by(full_name)),
+        project_members(user_id, role, member:profiles!user_id(id, full_name, role)),
+        project_contacts(contact_id, role, contact:contacts!contact_id(id, name, company, stage)),
+        project_notes(*, author:profiles!created_by(full_name)),
+        project_tasks(*, assignee:profiles!assigned_to(full_name))
       `)
       .eq('id', req.params.id)
       .single();
