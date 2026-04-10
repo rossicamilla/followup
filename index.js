@@ -155,14 +155,7 @@ TESTO: ${body}
 }
 
 function startEmailProcessingCron() {
-  if (!process.env.ANTHROPIC_API_KEY || !process.env.MICROSOFT_CLIENT_ID) {
-    console.log('[email-cron] Disabilitato (ANTHROPIC_API_KEY o MICROSOFT_CLIENT_ID mancanti)');
-    return;
-  }
-  // Ogni 15 minuti
-  cron.schedule('*/15 * * * *', () => {
-    console.log('[email-cron] Avvio analisi email...');
-    runEmailProcessing();
-  });
-  console.log('[email-cron] ✓ Avviato (ogni 15 minuti)');
+  // Cron automatico disabilitato per sicurezza:
+  // le email vengono processate solo su richiesta manuale (pulsante "Analizza email" in Tasks)
+  console.log('[email-cron] Modalità manuale — usa il pulsante "Analizza email" nel CRM');
 }
