@@ -3,12 +3,8 @@ import { api } from '../../lib/api'
 import { useApp } from '../../App'
 import {
   DndContext, PointerSensor, TouchSensor, useSensor, useSensors,
-  closestCenter, useDroppable,
+  useDroppable, useDraggable,
 } from '@dnd-kit/core'
-import {
-  arrayMove, SortableContext, useSortable, verticalListSortingStrategy,
-} from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
 
 const STAGES = [
   {
@@ -299,14 +295,12 @@ function AgentUpdateModal({ opp, onClose, onSaved }) {
 const STAGE_NEXT = { proposto: 'campione', campione: 'offerta', offerta: 'ordine' }
 const STAGE_NEXT_LABEL = { proposto: 'Campione →', campione: 'Offerta →', offerta: 'Ordine →' }
 
-// ── Droppable + sortable column ───────────────────────────────────────────────
-function DroppableColumn({ id, items, children }) {
+// ── Droppable column ──────────────────────────────────────────────────────────
+function DroppableColumn({ id, children }) {
   const { setNodeRef } = useDroppable({ id })
   return (
     <div ref={setNodeRef} className="flex-1 overflow-y-auto p-2 scrollbar-none">
-      <SortableContext items={items} strategy={verticalListSortingStrategy}>
-        {children}
-      </SortableContext>
+      {children}
     </div>
   )
 }
@@ -319,13 +313,10 @@ function OppCard({ opp, stage, onClick, onAdvanced, onClose, compact }) {
   const clientCompany = opp.contact?.company
   const nextStage = STAGE_NEXT[opp.stage]
 
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: opp.id })
-  const dragStyle = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.45 : 1,
-    zIndex: isDragging ? 50 : 'auto',
-  }
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: opp.id })
+  const dragStyle = transform
+    ? { transform: `translate3d(${transform.x}px,${transform.y}px,0)`, zIndex: 50, opacity: 0.45 }
+    : undefined
 
   async function handleAdvance(e) {
     e.stopPropagation()
@@ -663,34 +654,16 @@ export default function ProductPipeline({ preProject, onModalClose }) {
   }
 
   async function handleDragEnd({ active, over }) {
-    if (!over || active.id === over.id) return
-    const activeId = active.id
-    const overId = over.id
-    const activeItem = pipeline.find(o => o.id === activeId)
-    if (!activeItem) return
-    const overIsColumn = STAGES.some(s => s.key === overId)
-    const overStage = overIsColumn ? overId : pipeline.find(o => o.id === overId)?.stage
-    if (!overStage) return
-
-    if (activeItem.stage !== overStage) {
-      // Sposta tra colonne
-      const prevStage = activeItem.stage
-      setPipeline(prev => prev.map(o => o.id === activeId ? { ...o, stage: overStage } : o))
-      try {
-        await api(`/api/pipeline/${activeId}`, { method: 'PATCH', body: { stage: overStage } })
-      } catch {
-        setPipeline(prev => prev.map(o => o.id === activeId ? { ...o, stage: prevStage } : o))
-      }
-    } else if (!overIsColumn) {
-      // Riordina dentro la stessa colonna
-      setPipeline(prev => {
-        const stageItems = prev.filter(o => o.stage === overStage)
-        const others = prev.filter(o => o.stage !== overStage)
-        const oldIdx = stageItems.findIndex(o => o.id === activeId)
-        const newIdx = stageItems.findIndex(o => o.id === overId)
-        if (oldIdx < 0 || newIdx < 0) return prev
-        return [...others, ...arrayMove(stageItems, oldIdx, newIdx)]
-      })
+    if (!over) return
+    const newStage = over.id   // sempre un column key
+    const opp = pipeline.find(o => o.id === active.id)
+    if (!opp || opp.stage === newStage) return
+    const prevStage = opp.stage
+    setPipeline(prev => prev.map(o => o.id === active.id ? { ...o, stage: newStage } : o))
+    try {
+      await api(`/api/pipeline/${active.id}`, { method: 'PATCH', body: { stage: newStage } })
+    } catch {
+      setPipeline(prev => prev.map(o => o.id === active.id ? { ...o, stage: prevStage } : o))
     }
   }
 
@@ -766,7 +739,7 @@ export default function ProductPipeline({ preProject, onModalClose }) {
 
       {/* Kanban */}
       {tab === 'kanban' && (
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
           <div className="flex flex-1 overflow-x-auto scrollbar-none bg-warm-50">
             {STAGES.map(stage => {
               const cards = filtered.filter(o => o.stage === stage.key)
@@ -783,7 +756,7 @@ export default function ProductPipeline({ preProject, onModalClose }) {
                     </div>
                   )}
                   {!loading && (
-                    <DroppableColumn id={stage.key} items={cards.map(o => o.id)}>
+                    <DroppableColumn id={stage.key}>
                       <div className="space-y-1.5">
                         {cards.map(o => (
                           <OppCard key={o.id} opp={o} stage={stage} compact={compact}

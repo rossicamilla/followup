@@ -3,12 +3,8 @@ import { api } from '../../lib/api'
 import { useApp } from '../../App'
 import {
   DndContext, PointerSensor, TouchSensor, useSensor, useSensors,
-  closestCenter, useDroppable,
+  useDroppable, useDraggable,
 } from '@dnd-kit/core'
-import {
-  arrayMove, SortableContext, useSortable, verticalListSortingStrategy,
-} from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
 
 // ── Costanti ──────────────────────────────────────────────────────────────────
 
@@ -668,14 +664,12 @@ const IDEA_PRI_CARD = {
   bassa: { bg: 'bg-yellow-50', border: 'border-yellow-200', borderL: 'border-l-yellow-400', divider: 'border-yellow-100',text: 'text-yellow-900',sub: 'text-yellow-500',btn: 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200' },
 }
 
-// ── Droppable + sortable column area ─────────────────────────────────────────
-function DroppableColumn({ id, items, children }) {
+// ── Droppable column area ─────────────────────────────────────────────────────
+function DroppableColumn({ id, children }) {
   const { setNodeRef } = useDroppable({ id })
   return (
     <div ref={setNodeRef} className="flex-1 overflow-y-auto p-2 scrollbar-none">
-      <SortableContext items={items} strategy={verticalListSortingStrategy}>
-        {children}
-      </SortableContext>
+      {children}
     </div>
   )
 }
@@ -684,13 +678,10 @@ function DroppableColumn({ id, items, children }) {
 function ProjectCard({ project, col, onClick, onAdvance, onProponi, compact }) {
   const [advancing, setAdvancing] = useState(false)
 
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: project.id })
-  const dragStyle = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.45 : 1,
-    zIndex: isDragging ? 50 : 'auto',
-  }
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: project.id })
+  const dragStyle = transform
+    ? { transform: `translate3d(${transform.x}px,${transform.y}px,0)`, zIndex: 50, opacity: 0.45 }
+    : undefined
 
   async function handleAdvance(e) {
     e.stopPropagation()
@@ -812,32 +803,16 @@ export default function Projects({ onProponiPipeline }) {
   }
 
   async function handleDragEnd({ active, over }) {
-    if (!over || active.id === over.id) return
-    const activeId = active.id
-    const overId = over.id
-    const activeItem = projects.find(p => p.id === activeId)
-    if (!activeItem) return
-    const overIsColumn = COLUMNS.some(c => c.key === overId)
-    const overStage = overIsColumn ? overId : projects.find(p => p.id === overId)?.stage
-    if (!overStage) return
-
-    if (activeItem.stage !== overStage) {
-      const prevStage = activeItem.stage
-      setProjects(prev => prev.map(p => p.id === activeId ? { ...p, stage: overStage } : p))
-      try {
-        await api(`/api/projects/${activeId}`, { method: 'PATCH', body: { stage: overStage } })
-      } catch {
-        setProjects(prev => prev.map(p => p.id === activeId ? { ...p, stage: prevStage } : p))
-      }
-    } else if (!overIsColumn) {
-      setProjects(prev => {
-        const colItems = prev.filter(p => p.stage === overStage)
-        const others = prev.filter(p => p.stage !== overStage)
-        const oldIdx = colItems.findIndex(p => p.id === activeId)
-        const newIdx = colItems.findIndex(p => p.id === overId)
-        if (oldIdx < 0 || newIdx < 0) return prev
-        return [...others, ...arrayMove(colItems, oldIdx, newIdx)]
-      })
+    if (!over) return
+    const newStage = over.id   // sempre un column key
+    const project = projects.find(p => p.id === active.id)
+    if (!project || project.stage === newStage) return
+    const prevStage = project.stage
+    setProjects(prev => prev.map(p => p.id === active.id ? { ...p, stage: newStage } : p))
+    try {
+      await api(`/api/projects/${active.id}`, { method: 'PATCH', body: { stage: newStage } })
+    } catch {
+      setProjects(prev => prev.map(p => p.id === active.id ? { ...p, stage: prevStage } : p))
     }
   }
 
@@ -949,7 +924,7 @@ export default function Projects({ onProponiPipeline }) {
       )}
 
       {/* Kanban */}
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+      <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
         <div className="flex flex-1 overflow-x-auto scrollbar-none bg-warm-50">
           {COLUMNS.map(col => {
             let cards = filtered.filter(p =>
@@ -973,7 +948,7 @@ export default function Projects({ onProponiPipeline }) {
                   </div>
                 )}
                 {!loading && (
-                  <DroppableColumn id={col.key} items={cards.map(p => p.id)}>
+                  <DroppableColumn id={col.key}>
                     <div className="space-y-1.5">
                       {cards.map(p => (
                         <ProjectCard key={p.id} project={p} col={col} compact={compact}
