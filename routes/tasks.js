@@ -11,9 +11,10 @@ router.get('/', requireAuth, async (req, res) => {
       .from('tasks')
       .select(`
         id, title, task_type, due_date, urgent, completed,
-        priority, contact_id, project_id, ai_generated,
+        priority, contact_id, project_id, opportunity_id, ai_generated, created_by,
         contact:contacts(name, company),
-        project:projects(name),
+        project:projects(id, name),
+        opportunity:pipeline(id, contact_name, contact:contacts(name), project:projects(name)),
         assigned_to:profiles!tasks_assigned_to_fkey(id, full_name, role)
       `)
       .order('due_date', { ascending: true, nullsLast: true });
@@ -58,7 +59,7 @@ router.get('/:id', requireAuth, async (req, res) => {
 
 // POST nuovo task (da UI manuale o da AI)
 router.post('/', requireAuth, async (req, res) => {
-  const { title, type, due_date, urgent, priority, contact_id, project_id, assigned_to_id } = req.body;
+  const { title, type, due_date, urgent, priority, contact_id, project_id, opportunity_id, assigned_to_id } = req.body;
 
   if (!title || !type) {
     return res.status(400).json({ error: 'Titolo e tipo richiesti' });
@@ -75,6 +76,7 @@ router.post('/', requireAuth, async (req, res) => {
         priority: priority || 'media',
         contact_id: contact_id || null,
         project_id: project_id || null,
+        opportunity_id: opportunity_id || null,
         assigned_to: assigned_to_id || req.profile.id,
         created_by: req.profile.id,
         ai_generated: false
@@ -130,7 +132,7 @@ router.post('/from-analysis', requireAuth, async (req, res) => {
 
 // PATCH aggiorna task
 router.patch('/:id', requireAuth, async (req, res) => {
-  const { title, type, due_date, urgent, completed, priority, assigned_to_id } = req.body;
+  const { title, type, due_date, urgent, completed, priority, assigned_to_id, project_id, opportunity_id } = req.body;
 
   try {
     const { data, error } = await supabase
@@ -142,7 +144,9 @@ router.patch('/:id', requireAuth, async (req, res) => {
         ...(urgent !== undefined && { urgent }),
         ...(priority && { priority }),
         ...(completed !== undefined && { completed, completed_at: completed ? new Date().toISOString() : null }),
-        ...(assigned_to_id && { assigned_to: assigned_to_id })
+        ...(assigned_to_id !== undefined && { assigned_to: assigned_to_id || null }),
+        ...(project_id !== undefined && { project_id: project_id || null }),
+        ...(opportunity_id !== undefined && { opportunity_id: opportunity_id || null }),
       })
       .eq('id', req.params.id)
       .select()

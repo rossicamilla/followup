@@ -23,8 +23,7 @@ const TYPE_OPTIONS = [
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" className="w-4 h-4">
       <circle cx="5.5" cy="5" r="2"/>
       <circle cx="10.5" cy="5" r="2"/>
-      <path d="M1 13c0-2.5 2-4 4.5-4"/>
-      <path d="M10.5 9c2.5 0 4.5 1.5 4.5 4H7.5"/>
+      <path d="M1 13c0-2.5 2-4 4.5-4M10.5 9c2.5 0 4.5 1.5 4.5 4H7.5"/>
     </svg>
   )},
 ]
@@ -48,34 +47,56 @@ function initials(n) {
   return (n || '?').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
 }
 
+function detectLinkType(task) {
+  if (task.opportunity_id || task.opportunity) return 'vendita'
+  if (task.project_id || task.project) return 'progetto'
+  return 'nessuno'
+}
+
 export default function TaskEditModal({ task, onClose, onSaved }) {
   const { profile } = useApp()
   const [form, setForm] = useState({
-    title: task.title || '',
-    type: task.task_type || task.type || 'task',
-    priority: task.priority || 'media',
-    due_date: task.due_date || '',
-    urgent: task.urgent || false,
+    title:          task.title || '',
+    type:           task.task_type || task.type || 'task',
+    priority:       task.priority || 'media',
+    due_date:       task.due_date || '',
+    urgent:         task.urgent || false,
     assigned_to_id: task.assigned_to?.id || '',
+    project_id:     task.project_id || '',
+    opportunity_id: task.opportunity_id || '',
   })
-  const [members, setMembers] = useState([])
-  const [saving, setSaving] = useState(false)
+  const [linkType, setLinkType] = useState(detectLinkType(task)) // 'nessuno' | 'progetto' | 'vendita'
+  const [members, setMembers]   = useState([])
+  const [projects, setProjects] = useState([])
+  const [opps, setOpps]         = useState([])
+  const [saving, setSaving]     = useState(false)
   const canReassign = profile?.role === 'admin' || profile?.role === 'manager'
 
   useEffect(() => {
     if (canReassign) api('/api/team/members').then(d => setMembers(d.members || [])).catch(() => {})
-  }, [canReassign])
+    api('/api/projects').then(d => setProjects(d.projects || [])).catch(() => {})
+    api('/api/pipeline').then(d => setOpps(d.pipeline || [])).catch(() => {})
+  }, [])
+
+  function changeLinkType(t) {
+    setLinkType(t)
+    if (t === 'nessuno')  setForm(f => ({ ...f, project_id: '', opportunity_id: '' }))
+    if (t === 'progetto') setForm(f => ({ ...f, opportunity_id: '' }))
+    if (t === 'vendita')  setForm(f => ({ ...f, project_id: '' }))
+  }
 
   async function save(e) {
     e.preventDefault()
     setSaving(true)
     try {
       const body = {
-        title: form.title,
-        type: form.type,
-        priority: form.priority,
-        due_date: form.due_date || null,
-        urgent: form.urgent,
+        title:         form.title,
+        type:          form.type,
+        priority:      form.priority,
+        due_date:      form.due_date || null,
+        urgent:        form.urgent,
+        project_id:    linkType === 'progetto' ? (form.project_id || null) : null,
+        opportunity_id: linkType === 'vendita' ? (form.opportunity_id || null) : null,
       }
       if (canReassign) body.assigned_to_id = form.assigned_to_id || null
       const d = await api(`/api/tasks/${task.id}`, { method: 'PATCH', body })
@@ -85,20 +106,24 @@ export default function TaskEditModal({ task, onClose, onSaved }) {
     setSaving(false)
   }
 
+  // Preview dell'elemento collegato attuale
+  const linkedProject = task.project || (projects.find(p => p.id === form.project_id))
+  const linkedOpp     = task.opportunity || (opps.find(o => o.id === form.opportunity_id))
+
   return (
     <div
       className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end md:items-center justify-center p-0 md:p-4"
       onClick={e => e.target === e.currentTarget && onClose()}
     >
-      <div className="bg-white rounded-t-3xl md:rounded-3xl w-full max-w-lg shadow-2xl">
+      <div className="bg-white rounded-t-3xl md:rounded-3xl w-full max-w-lg shadow-2xl max-h-[92vh] overflow-y-auto">
 
         {/* Handle mobile */}
-        <div className="flex justify-center pt-3 pb-0 md:hidden">
+        <div className="flex justify-center pt-3 pb-0 md:hidden sticky top-0 bg-white z-10">
           <div className="w-10 h-1 rounded-full bg-warm-200"/>
         </div>
 
         {/* Header */}
-        <div className="flex items-center px-6 pt-5 pb-3">
+        <div className="flex items-center px-6 pt-5 pb-3 sticky top-3 bg-white z-10">
           <span className="flex-1 text-base font-700 text-warm-900">Modifica task</span>
           <button onClick={onClose}
             className="w-8 h-8 flex items-center justify-center rounded-full bg-warm-100 hover:bg-warm-200 transition-colors">
@@ -173,6 +198,83 @@ export default function TaskEditModal({ task, onClose, onSaved }) {
                 ⚡ Urgente
               </button>
             </div>
+          </div>
+
+          {/* Collegato a */}
+          <div>
+            <div className="text-2xs font-700 text-warm-400 uppercase tracking-widest mb-2.5">Collegato a</div>
+
+            {/* Tipo collegamento */}
+            <div className="flex gap-2 mb-3">
+              {[
+                { k: 'nessuno',  label: 'Nessuno' },
+                { k: 'progetto', label: '📦 Progetto' },
+                { k: 'vendita',  label: '🎯 Vendita' },
+              ].map(({ k, label }) => (
+                <button key={k} type="button" onClick={() => changeLinkType(k)}
+                  className={`px-3 py-2 rounded-xl text-xs font-600 transition-all flex-1 ${
+                    linkType === k
+                      ? 'bg-warm-900 text-white shadow-sm'
+                      : 'bg-warm-50 text-warm-500 hover:bg-warm-100'
+                  }`}>
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            {/* Selezione progetto */}
+            {linkType === 'progetto' && (
+              <div>
+                <select value={form.project_id}
+                  onChange={e => setForm(f => ({ ...f, project_id: e.target.value }))}
+                  className="w-full text-sm bg-warm-50 rounded-2xl px-4 py-3.5 border-0 focus:outline-none focus:ring-2 focus:ring-brand-200 text-warm-700">
+                  <option value="">Seleziona progetto...</option>
+                  {projects.map(p => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+                {/* Card anteprima progetto selezionato */}
+                {form.project_id && linkedProject && (
+                  <div className="mt-2 bg-blue-50 border border-blue-200 rounded-2xl px-4 py-3 flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-xl bg-blue-100 flex items-center justify-center text-base flex-shrink-0">📦</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-700 text-blue-900 truncate">{linkedProject.name}</div>
+                      <div className="text-2xs text-blue-500 mt-0.5">Progetto</div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Selezione vendita */}
+            {linkType === 'vendita' && (
+              <div>
+                <select value={form.opportunity_id}
+                  onChange={e => setForm(f => ({ ...f, opportunity_id: e.target.value }))}
+                  className="w-full text-sm bg-warm-50 rounded-2xl px-4 py-3.5 border-0 focus:outline-none focus:ring-2 focus:ring-brand-200 text-warm-700">
+                  <option value="">Seleziona opportunità...</option>
+                  {opps.filter(o => o.stage !== 'chiuso').map(o => (
+                    <option key={o.id} value={o.id}>
+                      {o.contact?.name || o.contact_name}{o.project?.name ? ` — ${o.project.name}` : ''}
+                    </option>
+                  ))}
+                </select>
+                {/* Card anteprima opportunità selezionata */}
+                {form.opportunity_id && linkedOpp && (
+                  <div className="mt-2 bg-emerald-50 border border-emerald-200 rounded-2xl px-4 py-3 flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-xl bg-emerald-100 flex items-center justify-center text-base flex-shrink-0">🎯</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-xs font-700 text-emerald-900 truncate">
+                        {linkedOpp.contact?.name || linkedOpp.contact_name}
+                      </div>
+                      <div className="text-2xs text-emerald-600 mt-0.5">
+                        {linkedOpp.project?.name || '—'} · {linkedOpp.stage}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Assegna a */}

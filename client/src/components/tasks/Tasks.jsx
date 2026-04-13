@@ -12,10 +12,10 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 
 const TYPE_BADGE = {
-  chiamata: 'bg-blue-50 text-blue-700',
-  email:    'bg-brand-50 text-brand-700',
-  meeting:  'bg-purple-50 text-purple-700',
-  task:     'bg-warm-100 text-warm-600',
+  chiamata: 'bg-blue-50 text-blue-600',
+  email:    'bg-brand-50 text-brand-600',
+  meeting:  'bg-purple-50 text-purple-600',
+  task:     'bg-warm-100 text-warm-500',
 }
 const PRI_LEFT = {
   alta:  'border-l-red-400',
@@ -40,30 +40,53 @@ function avatarColor(name) {
   return AV_COLORS[h]
 }
 
-// ── Card task (drag & drop) ───────────────────────────────────────────────────
+// ── Elemento collegato ────────────────────────────────────────────────────────
+function LinkedBadge({ project, opportunity }) {
+  if (project?.name) return (
+    <div className="flex items-center gap-1.5 min-w-0">
+      <span className="text-sm flex-shrink-0">📦</span>
+      <span className="text-xs font-500 text-warm-700 truncate">{project.name}</span>
+    </div>
+  )
+  if (opportunity) {
+    const name = opportunity.contact?.name || opportunity.contact_name || '—'
+    const prod = opportunity.project?.name
+    return (
+      <div className="flex items-center gap-1.5 min-w-0">
+        <span className="text-sm flex-shrink-0">🎯</span>
+        <span className="text-xs font-500 text-warm-700 truncate">{name}{prod ? ` · ${prod}` : ''}</span>
+      </div>
+    )
+  }
+  return <span className="text-xs text-warm-300">—</span>
+}
+
+// ── Riga task (drag & drop) ───────────────────────────────────────────────────
 function SortableTask({ task, today, onToggle, onDelete, onDraft, onSync, onEdit }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id })
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }
   const overdue = !task.completed && task.due_date && task.due_date < today
-  const priLeft = PRI_LEFT[task.priority] || 'border-l-warm-100'
+  const priLeft = PRI_LEFT[task.priority] || 'border-l-transparent'
 
   return (
     <div ref={setNodeRef} style={style}
-      className={`flex items-start gap-3 pl-3 pr-4 py-3.5 hover:bg-warm-50/80 transition-colors group border-b border-warm-100 last:border-b-0 border-l-[3px] ${priLeft}`}>
+      className={`flex items-center gap-3 pl-3 pr-4 py-3 hover:bg-warm-50/80 transition-colors group border-b border-warm-100 last:border-b-0 border-l-[3px] ${priLeft} cursor-pointer`}
+      onClick={() => onEdit(task)}>
 
       {/* Drag handle */}
       <div {...attributes} {...listeners}
-        className="mt-1 flex-shrink-0 cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-40 transition-opacity touch-none">
-        <svg viewBox="0 0 8 14" fill="currentColor" className="w-2.5 h-3.5 text-warm-400">
-          <circle cx="2" cy="2" r="1.2"/><circle cx="6" cy="2" r="1.2"/>
-          <circle cx="2" cy="7" r="1.2"/><circle cx="6" cy="7" r="1.2"/>
-          <circle cx="2" cy="12" r="1.2"/><circle cx="6" cy="12" r="1.2"/>
+        className="flex-shrink-0 cursor-grab active:cursor-grabbing opacity-0 group-hover:opacity-30 transition-opacity touch-none"
+        onClick={e => e.stopPropagation()}>
+        <svg viewBox="0 0 8 14" fill="currentColor" className="w-2 h-3.5 text-warm-400">
+          <circle cx="2" cy="2" r="1.1"/><circle cx="6" cy="2" r="1.1"/>
+          <circle cx="2" cy="7" r="1.1"/><circle cx="6" cy="7" r="1.1"/>
+          <circle cx="2" cy="12" r="1.1"/><circle cx="6" cy="12" r="1.1"/>
         </svg>
       </div>
 
       {/* Checkbox */}
-      <button onClick={() => onToggle(task.id, !task.completed)}
-        className={`mt-0.5 w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-all ${
+      <button onClick={e => { e.stopPropagation(); onToggle(task.id, !task.completed) }}
+        className={`w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center transition-all ${
           task.completed ? 'bg-brand-500 border-brand-500' : 'border-warm-300 hover:border-brand-400'
         }`}>
         {task.completed && (
@@ -73,23 +96,18 @@ function SortableTask({ task, today, onToggle, onDelete, onDraft, onSync, onEdit
         )}
       </button>
 
-      {/* Contenuto */}
+      {/* Titolo + badges — flex-1 */}
       <div className="flex-1 min-w-0">
-        <div className={`text-sm font-500 leading-snug ${
+        <div className={`text-sm font-500 truncate ${
           task.completed ? 'text-warm-300 line-through' : overdue ? 'text-red-600' : 'text-warm-900'
         }`}>
           {task.urgent && !task.completed && <span className="mr-1">⚡</span>}
           {task.title}
         </div>
-        <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
           {task.task_type && (
-            <span className={`text-2xs font-600 px-2 py-0.5 rounded-full capitalize ${TYPE_BADGE[task.task_type] || TYPE_BADGE.task}`}>
+            <span className={`text-2xs font-600 px-1.5 py-0.5 rounded-full capitalize ${TYPE_BADGE[task.task_type] || TYPE_BADGE.task}`}>
               {task.task_type}
-            </span>
-          )}
-          {task.due_date && (
-            <span className={`text-2xs font-500 ${overdue ? 'text-red-500' : 'text-warm-400'}`}>
-              {overdue ? '⚠ ' : ''}{new Date(task.due_date + 'T12:00:00').toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })}
             </span>
           )}
           {task.ai_generated && (
@@ -98,27 +116,44 @@ function SortableTask({ task, today, onToggle, onDelete, onDraft, onSync, onEdit
         </div>
       </div>
 
-      {/* Avatar assegnatario */}
-      {task.assigned_to && (
-        <div
-          className={`w-6 h-6 rounded-full flex items-center justify-center text-2xs font-700 flex-shrink-0 mt-0.5 ${avatarColor(task.assigned_to.full_name)}`}
-          title={task.assigned_to.full_name}>
-          {initials(task.assigned_to.full_name)}
-        </div>
-      )}
+      {/* Collegato a — w-44, nascosto su mobile */}
+      <div className="hidden md:block w-44 flex-shrink-0 min-w-0">
+        <LinkedBadge project={task.project} opportunity={task.opportunity} />
+      </div>
 
-      {/* Azioni hover */}
-      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-        <button onClick={() => onEdit(task)} title="Modifica"
-          className="text-warm-300 hover:text-warm-700 p-1.5 rounded-lg hover:bg-warm-100 transition-colors">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5">
-            <path d="M11 2l3 3-8 8H3v-3l8-8z"/>
-          </svg>
-        </button>
+      {/* Assegnatario — w-8 */}
+      <div className="w-8 flex-shrink-0 flex justify-center">
+        {task.assigned_to ? (
+          <div
+            className={`w-7 h-7 rounded-full flex items-center justify-center text-2xs font-700 ${avatarColor(task.assigned_to.full_name)}`}
+            title={task.assigned_to.full_name}>
+            {initials(task.assigned_to.full_name)}
+          </div>
+        ) : (
+          <div className="w-7 h-7 rounded-full border-2 border-dashed border-warm-200"/>
+        )}
+      </div>
+
+      {/* Scadenza — w-20, nascosto su mobile */}
+      <div className="hidden md:flex w-20 flex-shrink-0 justify-end">
+        {task.due_date ? (
+          <span className={`text-xs font-500 px-2 py-1 rounded-lg ${
+            overdue ? 'bg-red-50 text-red-600' : 'text-warm-400'
+          }`}>
+            {overdue ? '⚠ ' : ''}{new Date(task.due_date + 'T12:00:00').toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })}
+          </span>
+        ) : (
+          <span className="text-xs text-warm-300 pr-2">—</span>
+        )}
+      </div>
+
+      {/* Azioni rapide — solo hover, stopPropagation per non aprire modal */}
+      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+        onClick={e => e.stopPropagation()}>
         <button onClick={() => onDraft(task)} title="Bozza email"
-          className="text-warm-300 hover:text-brand-500 p-1.5 rounded-lg hover:bg-brand-50 transition-colors text-sm">✉</button>
+          className="text-warm-300 hover:text-brand-500 p-1.5 rounded-lg hover:bg-brand-50 transition-colors text-sm leading-none">✉</button>
         {task.due_date && (
-          <button onClick={() => onSync(task)} title="Sincronizza Outlook"
+          <button onClick={() => onSync(task)} title="Outlook"
             className="text-warm-300 hover:text-blue-500 p-1.5 rounded-lg hover:bg-blue-50 transition-colors">
             <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5">
               <rect x="1.5" y="3" width="13" height="10" rx="1.5"/><path d="M1.5 6h13M5.5 6v7"/>
@@ -171,7 +206,6 @@ function QuickAdd({ members, onCreated }) {
   return (
     <div className="px-4 pt-3 pb-2.5 bg-white border-b border-warm-100 flex-shrink-0">
       <form onSubmit={submit}>
-        {/* Input + bottone aggiungi */}
         <div className="flex items-center gap-2 mb-2.5">
           <input
             ref={inputRef}
@@ -190,11 +224,7 @@ function QuickAdd({ members, onCreated }) {
             }
           </button>
         </div>
-
-        {/* Chips tipo + priorità + data + avatar */}
         <div className="flex items-center gap-1 overflow-x-auto scrollbar-none">
-
-          {/* Tipo */}
           {Object.entries(TYPE_LABELS).map(([t, l]) => (
             <button key={t} type="button" onClick={() => setType(t)}
               className={`px-2.5 py-1 rounded-lg text-xs font-600 transition-all flex-shrink-0 ${
@@ -203,10 +233,7 @@ function QuickAdd({ members, onCreated }) {
               {l}
             </button>
           ))}
-
           <div className="w-px h-3.5 bg-warm-200 mx-1 flex-shrink-0"/>
-
-          {/* Priorità */}
           {[
             { k: 'bassa', label: 'Bassa', dot: 'bg-emerald-400', sel: 'bg-emerald-50 text-emerald-700 font-700' },
             { k: 'media', label: 'Media', dot: 'bg-amber-400',   sel: 'bg-amber-50 text-amber-700 font-700'    },
@@ -216,18 +243,13 @@ function QuickAdd({ members, onCreated }) {
               className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs transition-all flex-shrink-0 ${
                 priority === p.k ? p.sel : 'text-warm-400 bg-warm-50 hover:bg-warm-100 font-500'
               }`}>
-              <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${p.dot}`}/>
+              <span className={`w-1.5 h-1.5 rounded-full ${p.dot}`}/>
               {p.label}
             </button>
           ))}
-
           <div className="w-px h-3.5 bg-warm-200 mx-1 flex-shrink-0"/>
-
-          {/* Data */}
           <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)}
             className="text-xs text-warm-500 bg-warm-50 rounded-lg px-2.5 py-1 border-0 focus:outline-none focus:ring-2 focus:ring-brand-100 cursor-pointer flex-shrink-0"/>
-
-          {/* Avatar assegnatari */}
           {canAssign && members.length > 0 && (
             <>
               <div className="w-px h-3.5 bg-warm-200 mx-1 flex-shrink-0"/>
@@ -259,9 +281,8 @@ export default function Tasks() {
 
   const [tasks, setTasks]               = useState([])
   const [loading, setLoading]           = useState(true)
-  const [viewTab, setViewTab]           = useState('mie')
-  const [filterStatus, setFilterStatus] = useState('')
-  const [filterPri, setFilterPri]       = useState('')
+  const [viewTab, setViewTab]           = useState('a-me')   // 'a-me' | 'da-me'
+  const [filterStatus, setFilterStatus] = useState('false')  // default: solo aperti
   const [filterType, setFilterType]     = useState('')
   const [aiText, setAiText]             = useState('')
   const [draftTask, setDraftTask]       = useState(null)
@@ -296,57 +317,50 @@ export default function Tasks() {
   }, [profile])
 
   async function processEmails() {
-    setProcessingEmails(true)
-    setEmailResult(null)
+    setProcessingEmails(true); setEmailResult(null)
     try {
       const r = await api('/api/outlook/process-emails', { method: 'POST', body: {} })
       setEmailResult({ ok: true, count: r.processed })
       if (r.processed > 0) load()
-    } catch (e) {
-      setEmailResult({ ok: false, error: e.message })
-    }
+    } catch (e) { setEmailResult({ ok: false, error: e.message }) }
     setProcessingEmails(false)
   }
 
-  // Filtra per tab (admin/manager vedono anche le proprie task separate)
+  // Tab filtering
   const tabFiltered = !isAdminOrManager
     ? tasks
-    : viewTab === 'mie'
+    : viewTab === 'a-me'
       ? tasks.filter(t => t.assigned_to?.id === profile?.id)
-      : tasks
+      : tasks.filter(t => t.created_by === profile?.id && t.assigned_to?.id !== profile?.id)
 
   const filtered = tabFiltered.filter(t => {
     if (filterStatus && String(t.completed) !== filterStatus) return false
-    if (filterPri && t.priority !== filterPri) return false
     if (filterType && (t.task_type || t.type) !== filterType) return false
     return true
   })
 
-  const myOpenCount  = isAdminOrManager ? tasks.filter(t => t.assigned_to?.id === profile?.id && !t.completed).length : 0
-  const allOpenCount = tasks.filter(t => !t.completed).length
+  const countAMe  = tasks.filter(t => t.assigned_to?.id === profile?.id && !t.completed).length
+  const countDaMe = tasks.filter(t => t.created_by === profile?.id && t.assigned_to?.id !== profile?.id && !t.completed).length
 
   async function toggle(id, completed) {
     await api(`/api/tasks/${id}`, { method: 'PATCH', body: { completed } })
     load()
   }
-
   async function deleteTask(id) {
     if (!confirm('Eliminare questo task?')) return
     await api(`/api/tasks/${id}`, { method: 'DELETE' })
     load()
   }
-
   async function syncToOutlook(task) {
     try {
       await api('/api/outlook/sync-task', { method: 'POST', body: { task_id: task.id } })
       alert('Task sincronizzato con Outlook!')
     } catch (e) {
       alert(e.message?.includes('non trovato')
-        ? 'Prima connetti il tuo account Outlook dalla barra laterale.'
-        : 'Errore sincronizzazione: ' + e.message)
+        ? 'Prima connetti il tuo account Outlook.'
+        : 'Errore: ' + e.message)
     }
   }
-
   async function handleAiSubmit(e) {
     e?.preventDefault()
     const text = aiText.trim()
@@ -357,33 +371,23 @@ export default function Tasks() {
       setPreview({ ...parsed, assignee_id: '' })
     } catch {
       await api('/api/tasks', { method: 'POST', body: { title: text, type: 'task', priority: 'media' } })
-      setAiText('')
-      load()
+      setAiText(''); load()
     }
     setParsing(false)
   }
-
   async function confirmCreate() {
     if (!preview) return
-    const body = {
-      title: preview.title,
-      type: preview.type || 'task',
-      priority: preview.priority || 'media',
-      due_date: preview.due_date || null,
-      urgent: preview.urgent || false,
-    }
+    const body = { title: preview.title, type: preview.type || 'task', priority: preview.priority || 'media', due_date: preview.due_date || null, urgent: preview.urgent || false }
     if (preview.assignee_id) body.assigned_to_id = preview.assignee_id
     await api('/api/tasks', { method: 'POST', body })
     setPreview(null); setAiText(''); load()
     aiInputRef.current?.focus()
   }
-
   function handleDragEnd({ active, over }) {
     if (!over || active.id === over.id) return
     setTasks(prev => {
       const ids = filtered.map(t => t.id)
-      const oldIdx = ids.indexOf(active.id)
-      const newIdx = ids.indexOf(over.id)
+      const oldIdx = ids.indexOf(active.id), newIdx = ids.indexOf(over.id)
       const reorderedIds = arrayMove(ids, oldIdx, newIdx)
       const result = [...prev]
       const positions = prev.reduce((acc, t, i) => { if (ids.includes(t.id)) acc.push(i); return acc }, [])
@@ -393,17 +397,21 @@ export default function Tasks() {
   }
 
   const today = new Date().toISOString().split('T')[0]
+  const openCount = filtered.filter(t => !t.completed).length
+  const doneCount = filtered.filter(t => t.completed).length
 
   return (
-    <div className="flex flex-col h-full overflow-hidden">
+    <div className="flex flex-col h-full overflow-hidden bg-white">
 
       {/* Header */}
-      <div className="px-6 py-4 bg-white border-b border-warm-200 flex-shrink-0">
-        <div className="flex items-center justify-between mb-3">
+      <div className="px-6 pt-5 pb-0 bg-white flex-shrink-0">
+        <div className="flex items-center justify-between mb-4">
           <div>
             <h1 className="text-base font-bold tracking-tight text-warm-900">Task & Reminder</h1>
             <p className="text-xs text-warm-400 mt-0.5">
-              {filtered.length} task
+              {openCount > 0 && <span>{openCount} aperte</span>}
+              {openCount > 0 && doneCount > 0 && <span className="mx-1">·</span>}
+              {doneCount > 0 && <span className="text-warm-300">{doneCount} completate</span>}
               {tasks.filter(t => t.ai_generated && !t.completed).length > 0 && (
                 <span className="ml-2 text-purple-500 font-600">
                   · {tasks.filter(t => t.ai_generated && !t.completed).length} da email
@@ -416,10 +424,7 @@ export default function Tasks() {
               className="flex items-center gap-1.5 text-xs font-600 px-3 py-1.5 rounded-xl border border-blue-200 text-blue-600 hover:bg-blue-50 transition-colors disabled:opacity-40">
               {processingEmails
                 ? <span className="w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"/>
-                : <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5">
-                    <rect x="1.5" y="3.5" width="13" height="10" rx="1.5"/>
-                    <path d="M1.5 6.5h13M5.5 6.5v7"/>
-                  </svg>
+                : <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5"><rect x="1.5" y="3.5" width="13" height="10" rx="1.5"/><path d="M1.5 6.5h13M5.5 6.5v7"/></svg>
               }
               {processingEmails ? 'Analisi...' : 'Analizza email'}
             </button>
@@ -430,75 +435,89 @@ export default function Tasks() {
           <div className={`mb-3 px-3 py-2 rounded-xl text-xs font-500 flex items-center justify-between ${
             emailResult.ok ? 'bg-purple-50 text-purple-700' : 'bg-red-50 text-red-600'
           }`}>
-            <span>
-              {emailResult.ok
-                ? (emailResult.count > 0 ? `✦ ${emailResult.count} email analizzate — nuove task create` : '✦ Nessuna email nuova da processare')
-                : `✗ ${emailResult.error}`}
-            </span>
+            <span>{emailResult.ok ? (emailResult.count > 0 ? `✦ ${emailResult.count} email analizzate` : '✦ Nessuna email nuova') : `✗ ${emailResult.error}`}</span>
             <button onClick={() => setEmailResult(null)} className="opacity-50 hover:opacity-100 ml-2">✕</button>
           </div>
         )}
 
-        {/* Tab Le mie / Tutte — solo admin e manager */}
-        {isAdminOrManager && (
-          <div className="flex items-center bg-warm-100 rounded-xl p-1 mb-3">
+        {/* Tab A me / Da me */}
+        {isAdminOrManager ? (
+          <div className="flex items-center gap-0 border-b border-warm-100">
             {[
-              { k: 'mie',   label: 'Le mie', count: myOpenCount  },
-              { k: 'tutte', label: 'Tutte',  count: allOpenCount },
+              { k: 'a-me',  label: 'Assegnate a me', count: countAMe  },
+              { k: 'da-me', label: 'Assegnate da me', count: countDaMe },
             ].map(({ k, label, count }) => (
               <button key={k} onClick={() => setViewTab(k)}
-                className={`flex-1 flex items-center justify-center gap-1.5 text-xs font-600 py-1.5 rounded-lg transition-all ${
+                className={`flex items-center gap-2 px-4 py-2.5 text-sm font-600 border-b-2 transition-all ${
                   viewTab === k
-                    ? 'bg-white text-warm-900 shadow-sm'
-                    : 'text-warm-500 hover:text-warm-700'
+                    ? 'border-warm-900 text-warm-900'
+                    : 'border-transparent text-warm-400 hover:text-warm-600'
                 }`}>
                 {label}
                 {count > 0 && (
-                  <span className={`text-2xs font-700 px-1.5 py-0.5 rounded-full leading-none ${
-                    viewTab === k ? 'bg-brand-500 text-white' : 'bg-warm-200 text-warm-600'
-                  }`}>
-                    {count}
-                  </span>
+                  <span className={`text-2xs font-700 px-1.5 py-0.5 rounded-full ${
+                    viewTab === k ? 'bg-brand-500 text-white' : 'bg-warm-100 text-warm-500'
+                  }`}>{count}</span>
                 )}
               </button>
             ))}
           </div>
+        ) : (
+          <div className="border-b border-warm-100 pb-0"/>
         )}
-
-        {/* Filtri */}
-        <div className="flex gap-2 flex-wrap">
-          {[
-            { value: filterStatus, set: setFilterStatus, opts: [['', 'Tutti'], ['false', 'Aperti'], ['true', 'Completati']] },
-            { value: filterPri,    set: setFilterPri,    opts: [['', 'Priorità'], ['alta', 'Alta'], ['media', 'Media'], ['bassa', 'Bassa']] },
-            { value: filterType,   set: setFilterType,   opts: [['', 'Tipo'], ['task', 'Task'], ['chiamata', 'Call'], ['email', 'Email'], ['meeting', 'Meeting']] },
-          ].map((f, i) => (
-            <select key={i} value={f.value} onChange={e => f.set(e.target.value)}
-              className="text-xs border border-warm-200 rounded-xl px-3 py-1.5 bg-white text-warm-700 font-medium focus:outline-none focus:border-brand-400">
-              {f.opts.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-            </select>
-          ))}
-        </div>
       </div>
 
       {/* Quick add */}
       <QuickAdd members={members} onCreated={load} />
 
+      {/* Filtri + intestazione colonne */}
+      <div className="flex-shrink-0 bg-white">
+        {/* Filtri */}
+        <div className="flex items-center gap-2 px-4 py-2 border-b border-warm-100">
+          <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)}
+            className="text-xs border border-warm-200 rounded-lg px-2.5 py-1.5 bg-white text-warm-600 font-500 focus:outline-none focus:border-brand-400">
+            <option value="">Tutti</option>
+            <option value="false">Aperti</option>
+            <option value="true">Completati</option>
+          </select>
+          <select value={filterType} onChange={e => setFilterType(e.target.value)}
+            className="text-xs border border-warm-200 rounded-lg px-2.5 py-1.5 bg-white text-warm-600 font-500 focus:outline-none focus:border-brand-400">
+            <option value="">Tutti i tipi</option>
+            <option value="task">Task</option>
+            <option value="chiamata">Chiamata</option>
+            <option value="email">Email</option>
+            <option value="meeting">Meeting</option>
+          </select>
+        </div>
+
+        {/* Intestazioni colonne tabella */}
+        <div className="flex items-center gap-3 pl-9 pr-4 py-2 bg-warm-50 border-b border-warm-100">
+          <div className="flex-1 text-2xs font-700 text-warm-400 uppercase tracking-wider">Task</div>
+          <div className="hidden md:block w-44 flex-shrink-0 text-2xs font-700 text-warm-400 uppercase tracking-wider">Collegato a</div>
+          <div className="w-8 flex-shrink-0"/>
+          <div className="hidden md:block w-20 flex-shrink-0 text-right text-2xs font-700 text-warm-400 uppercase tracking-wider">Scadenza</div>
+          <div className="w-16 flex-shrink-0"/>
+        </div>
+      </div>
+
       {/* Lista task */}
       <div className="flex-1 overflow-y-auto scrollbar-none">
         {loading && (
           <div className="p-6 space-y-2">
-            {[1, 2, 3].map(i => <div key={i} className="h-14 bg-white rounded-xl border border-warm-200 animate-pulse"/>)}
+            {[1, 2, 3, 4].map(i => <div key={i} className="h-12 bg-warm-50 rounded-xl animate-pulse"/>)}
           </div>
         )}
         {!loading && filtered.length === 0 && (
-          <div className="flex flex-col items-center justify-center h-full text-warm-300 gap-2">
+          <div className="flex flex-col items-center justify-center h-full text-warm-300 gap-3 pb-20">
             <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" strokeWidth="1" className="w-10 h-10 opacity-40">
               <path d="M14 20l5 5L26 14"/><circle cx="20" cy="20" r="17"/>
             </svg>
             <p className="text-sm">
-              {viewTab === 'mie' && isAdminOrManager
+              {viewTab === 'a-me' && isAdminOrManager
                 ? 'Nessun task assegnato a te'
-                : 'Nessun task. Creane uno!'}
+                : viewTab === 'da-me'
+                  ? 'Nessun task che hai assegnato ad altri'
+                  : 'Nessun task. Creane uno!'}
             </p>
           </div>
         )}
@@ -517,7 +536,7 @@ export default function Tasks() {
         )}
       </div>
 
-      {/* Preview interpretazione AI */}
+      {/* Preview AI */}
       {preview && (
         <div className="px-4 pt-3 pb-2 bg-gradient-to-b from-brand-50 to-white border-t border-brand-100 flex-shrink-0">
           <div className="flex items-center gap-1.5 mb-2">
@@ -530,14 +549,12 @@ export default function Tasks() {
             onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); confirmCreate() } }}
             className="w-full text-sm font-600 text-warm-900 border border-brand-200 rounded-xl px-3 py-2 mb-2 focus:outline-none focus:border-brand-400 bg-white"/>
           <div className="flex flex-wrap gap-1.5 mb-2">
-            {['task', 'chiamata', 'email', 'meeting'].map(t => (
-              <button key={t} type="button" onClick={() => setPreview(p => ({ ...p, type: t }))}
-                className={`text-2xs font-700 px-2.5 py-1 rounded-full capitalize transition-colors ${
-                  preview.type === t ? 'bg-warm-900 text-white' : 'bg-warm-100 text-warm-500 hover:bg-warm-200'
-                }`}>{t}</button>
+            {['task','chiamata','email','meeting'].map(t => (
+              <button key={t} type="button" onClick={() => setPreview(p => ({...p, type: t}))}
+                className={`text-2xs font-700 px-2.5 py-1 rounded-full capitalize transition-colors ${preview.type === t ? 'bg-warm-900 text-white' : 'bg-warm-100 text-warm-500 hover:bg-warm-200'}`}>{t}</button>
             ))}
-            {['bassa', 'media', 'alta'].map(p => (
-              <button key={p} type="button" onClick={() => setPreview(prev => ({ ...prev, priority: p }))}
+            {['bassa','media','alta'].map(p => (
+              <button key={p} type="button" onClick={() => setPreview(prev => ({...prev, priority: p}))}
                 className={`text-2xs font-700 px-2.5 py-1 rounded-full capitalize transition-colors ${
                   preview.priority === p
                     ? p === 'alta' ? 'bg-red-500 text-white' : p === 'media' ? 'bg-amber-400 text-white' : 'bg-emerald-500 text-white'
@@ -545,11 +562,11 @@ export default function Tasks() {
                 }`}>{p}</button>
             ))}
             <button onClick={() => setPreview(p => ({ ...p, urgent: !p.urgent }))}
-              className={`text-2xs font-700 px-2 py-1 rounded-full transition-colors ${preview.urgent ? 'bg-red-100 text-red-600' : 'bg-warm-100 text-warm-400 hover:bg-warm-200'}`}>
+              className={`text-2xs font-700 px-2 py-1 rounded-full ${preview.urgent ? 'bg-red-100 text-red-600' : 'bg-warm-100 text-warm-400 hover:bg-warm-200'}`}>
               ⚡ Urgente
             </button>
             <input type="date" value={preview.due_date || ''} onChange={e => setPreview(p => ({ ...p, due_date: e.target.value || null }))}
-              className="text-2xs font-600 text-warm-600 bg-warm-100 rounded-full px-2 py-1 border-0 focus:outline-none cursor-pointer"/>
+              className="text-2xs text-warm-600 bg-warm-100 rounded-full px-2 py-1 border-0 focus:outline-none cursor-pointer"/>
           </div>
           {members.length > 0 && (
             <div className="flex gap-1.5 mb-2.5 flex-wrap">
@@ -557,13 +574,9 @@ export default function Tasks() {
                 const sel = preview.assignee_id === m.id
                 return (
                   <button key={m.id} type="button"
-                    onClick={() => setPreview(p => ({ ...p, assignee_id: sel ? '' : m.id }))}
-                    className={`flex items-center gap-1.5 pl-1 pr-2.5 py-1 rounded-full text-xs font-600 transition-all ${
-                      sel ? 'bg-warm-900 text-white' : 'bg-warm-50 text-warm-600 hover:bg-warm-100'
-                    }`}>
-                    <div className={`w-5 h-5 rounded-full flex items-center justify-center text-2xs font-700 ${
-                      sel ? 'bg-white/20 text-white' : AV_COLORS[i % AV_COLORS.length]
-                    }`}>
+                    onClick={() => setPreview(p => ({...p, assignee_id: sel ? '' : m.id}))}
+                    className={`flex items-center gap-1.5 pl-1 pr-2.5 py-1 rounded-full text-xs font-600 transition-all ${sel ? 'bg-warm-900 text-white' : 'bg-warm-50 text-warm-600 hover:bg-warm-100'}`}>
+                    <div className={`w-5 h-5 rounded-full flex items-center justify-center text-2xs font-700 ${sel ? 'bg-white/20 text-white' : AV_COLORS[i % AV_COLORS.length]}`}>
                       {initials(m.full_name)}
                     </div>
                     {m.full_name.split(' ')[0]}
