@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { api } from '../../lib/api'
 import { useApp } from '../../App'
-import EmailDraftModal from '../ai/EmailDraftModal'
 import TaskEditModal from './TaskEditModal'
 import NewTaskModal from './NewTaskModal'
 import {
@@ -58,7 +57,7 @@ function LinkedBadge({ project, opportunity }) {
 }
 
 // ── Riga task ─────────────────────────────────────────────────────────────────
-function SortableTask({ task, today, onToggle, onDelete, onDraft, onSync, onEdit }) {
+function SortableTask({ task, today, onToggle, onDelete, onEdit }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id })
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.4 : 1 }
   const overdue = !task.completed && task.due_date && task.due_date < today
@@ -150,19 +149,9 @@ function SortableTask({ task, today, onToggle, onDelete, onDraft, onSync, onEdit
         )}
       </div>
 
-      {/* Azioni hover */}
-      <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 ml-1"
+      {/* Elimina */}
+      <div className="opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 ml-1"
         onClick={e => e.stopPropagation()}>
-        <button onClick={() => onDraft(task)} title="Bozza email"
-          className="text-warm-300 hover:text-brand-500 p-1.5 rounded-lg hover:bg-brand-50 transition-colors text-sm leading-none">✉</button>
-        {task.due_date && (
-          <button onClick={() => onSync(task)} title="Outlook"
-            className="text-warm-300 hover:text-blue-500 p-1.5 rounded-lg hover:bg-blue-50 transition-colors">
-            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5">
-              <rect x="1.5" y="3" width="13" height="10" rx="1.5"/><path d="M1.5 6h13M5.5 6v7"/>
-            </svg>
-          </button>
-        )}
         <button onClick={() => onDelete(task.id)}
           className="text-warm-300 hover:text-red-500 p-1.5 rounded-lg hover:bg-red-50 transition-colors">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5"><path d="M4 4l8 8M12 4l-8 8"/></svg>
@@ -183,7 +172,6 @@ export default function Tasks() {
   const [filterPri, setFilterPri]           = useState('')
   const [includeCompleted, setIncludeCompleted] = useState(false)
   const [searchQuery, setSearchQuery]       = useState('')
-  const [draftTask, setDraftTask]           = useState(null)
   const [editTask, setEditTask]             = useState(null)
   const [showNew, setShowNew]               = useState(false)
   const [processingEmails, setProcessingEmails] = useState(false)
@@ -251,14 +239,6 @@ export default function Tasks() {
     if (!confirm(`Eliminare ${completedIds.length} task completate?`)) return
     await Promise.all(completedIds.map(id => api(`/api/tasks/${id}`, { method: 'DELETE' })))
     load()
-  }
-  async function syncToOutlook(task) {
-    try {
-      await api('/api/outlook/sync-task', { method: 'POST', body: { task_id: task.id } })
-      alert('Task sincronizzato con Outlook!')
-    } catch (e) {
-      alert(e.message?.includes('non trovato') ? 'Prima connetti Outlook.' : 'Errore: ' + e.message)
-    }
   }
   function handleDragEnd({ active, over }) {
     if (!over || active.id === over.id) return
@@ -434,8 +414,7 @@ export default function Tasks() {
               <div>
                 {filtered.map(t => (
                   <SortableTask key={t.id} task={t} today={today}
-                    onToggle={toggle} onDelete={deleteTask}
-                    onDraft={setDraftTask} onSync={syncToOutlook} onEdit={setEditTask}/>
+                    onToggle={toggle} onDelete={deleteTask} onEdit={setEditTask}/>
                 ))}
               </div>
             </SortableContext>
@@ -447,7 +426,6 @@ export default function Tasks() {
       {showNew && (
         <NewTaskModal onClose={() => setShowNew(false)} onCreated={() => { load(); setShowNew(false) }}/>
       )}
-      {draftTask && <EmailDraftModal task={draftTask} onClose={() => setDraftTask(null)} />}
       {editTask && (
         <TaskEditModal task={editTask} onClose={() => setEditTask(null)}
           onSaved={() => { load(); setEditTask(null) }}/>
