@@ -10,7 +10,7 @@ router.get('/', requireAuth, async (req, res) => {
     let query = supabase
       .from('tasks')
       .select(`
-        id, title, task_type, due_date, urgent, completed,
+        id, title, task_type, due_date, urgent, completed, notes,
         priority, contact_id, project_id, opportunity_id, ai_generated, created_by, created_at,
         contact:contacts(name, company),
         project:projects(id, name),
@@ -59,7 +59,7 @@ router.get('/:id', requireAuth, async (req, res) => {
 
 // POST nuovo task (da UI manuale o da AI)
 router.post('/', requireAuth, async (req, res) => {
-  const { title, type, due_date, urgent, priority, contact_id, project_id, opportunity_id, assigned_to_id } = req.body;
+  const { title, type, due_date, urgent, priority, contact_id, project_id, opportunity_id, assigned_to_id, notes } = req.body;
 
   if (!title || !type) {
     return res.status(400).json({ error: 'Titolo e tipo richiesti' });
@@ -74,6 +74,7 @@ router.post('/', requireAuth, async (req, res) => {
         due_date: due_date || null,
         urgent: urgent || false,
         priority: priority || 'media',
+        notes: notes || null,
         contact_id: contact_id || null,
         project_id: project_id || null,
         opportunity_id: opportunity_id || null,
@@ -132,7 +133,7 @@ router.post('/from-analysis', requireAuth, async (req, res) => {
 
 // PATCH aggiorna task
 router.patch('/:id', requireAuth, async (req, res) => {
-  const { title, type, due_date, urgent, completed, priority, assigned_to_id, project_id, opportunity_id } = req.body;
+  const { title, type, due_date, urgent, completed, priority, assigned_to_id, project_id, opportunity_id, notes } = req.body;
 
   try {
     const { data, error } = await supabase
@@ -143,6 +144,7 @@ router.patch('/:id', requireAuth, async (req, res) => {
         ...(due_date !== undefined && { due_date }),
         ...(urgent !== undefined && { urgent }),
         ...(priority && { priority }),
+        ...(notes !== undefined && { notes: notes || null }),
         ...(completed !== undefined && { completed, completed_at: completed ? new Date().toISOString() : null }),
         ...(assigned_to_id !== undefined && { assigned_to: assigned_to_id || null }),
         ...(project_id !== undefined && { project_id: project_id || null }),

@@ -64,9 +64,10 @@ function SortableTask({ task, today, onToggle, onDelete, onDraft, onSync, onEdit
   const overdue = !task.completed && task.due_date && task.due_date < today
   const priLeft = PRI_LEFT[task.priority] || 'border-l-transparent'
 
+  const urgentRow = task.urgent && !task.completed
   return (
     <div ref={setNodeRef} style={style}
-      className={`flex items-center gap-0 pl-3 pr-3 py-3 hover:bg-warm-50 transition-colors group border-b border-warm-100 last:border-b-0 border-l-[3px] ${priLeft} cursor-pointer`}
+      className={`flex items-center gap-0 pl-3 pr-3 py-3 transition-colors group border-b border-warm-100 last:border-b-0 border-l-[3px] ${priLeft} cursor-pointer ${urgentRow ? 'bg-red-50 hover:bg-red-100' : 'hover:bg-warm-50'}`}
       onClick={() => onEdit(task)}>
 
       {/* Drag handle */}
@@ -108,6 +109,11 @@ function SortableTask({ task, today, onToggle, onDelete, onDraft, onSync, onEdit
           )}
           {task.ai_generated && (
             <span className="text-2xs font-700 px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-600">✦ AI</span>
+          )}
+          {task.notes && (
+            <span className="text-2xs text-warm-400 truncate max-w-[160px]" title={task.notes}>
+              📝 {task.notes}
+            </span>
           )}
         </div>
       </div>
@@ -444,10 +450,7 @@ export default function Tasks() {
       {draftTask && <EmailDraftModal task={draftTask} onClose={() => setDraftTask(null)} />}
       {editTask && (
         <TaskEditModal task={editTask} onClose={() => setEditTask(null)}
-          onSaved={updated => {
-            setTasks(prev => prev.map(t => t.id === updated.id ? { ...t, ...updated } : t))
-            setEditTask(null)
-          }}/>
+          onSaved={() => { load(); setEditTask(null) }}/>
       )}
     </div>
   )

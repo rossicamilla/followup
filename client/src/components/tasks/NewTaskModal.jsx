@@ -29,7 +29,7 @@ export default function NewTaskModal({ onClose, onCreated }) {
   const [interpreted, setInterpreted] = useState(false)
   const [form, setForm] = useState({
     title: '', type: 'task', priority: 'media',
-    due_date: '', urgent: false,
+    due_date: '', urgent: false, notes: '',
     assigned_to_id: '', project_id: '', opportunity_id: '',
   })
   const [linkType, setLinkType] = useState('nessuno')
@@ -89,6 +89,7 @@ export default function NewTaskModal({ onClose, onCreated }) {
         priority:       form.priority,
         due_date:       form.due_date || null,
         urgent:         form.urgent,
+        notes:          form.notes || null,
         assigned_to_id: form.assigned_to_id || null,
         project_id:     linkType === 'progetto' ? (form.project_id || null) : null,
         opportunity_id: linkType === 'vendita'  ? (form.opportunity_id || null) : null,
@@ -228,6 +229,18 @@ export default function NewTaskModal({ onClose, onCreated }) {
                       </div>
                     </div>
                   )}
+                </div>
+
+                {/* Note */}
+                <div className="mt-5">
+                  <div className="text-2xs font-700 text-warm-400 uppercase tracking-widest mb-2">Note</div>
+                  <textarea
+                    value={form.notes}
+                    onChange={e => setForm(f => ({...f, notes: e.target.value}))}
+                    placeholder="Aggiungi note interne..."
+                    rows={3}
+                    className="w-full text-sm bg-warm-50 rounded-xl px-3 py-2.5 border-0 focus:outline-none focus:ring-2 focus:ring-brand-200 text-warm-700 placeholder:text-warm-300 resize-none leading-relaxed"
+                  />
                 </div>
               </div>
 
