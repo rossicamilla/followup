@@ -2,6 +2,10 @@ import { useState, useEffect } from 'react'
 import { api } from '../../lib/api'
 import { useApp } from '../../App'
 import ContactTimeline from '../contacts/ContactTimeline'
+import {
+  DndContext, PointerSensor, TouchSensor, useSensor, useSensors,
+  useDroppable, useDraggable,
+} from '@dnd-kit/core'
 
 const STAGES = [
   { key: 'new',  label: 'Nuovi',  color: 'text-blue-600',  dot: 'bg-blue-400' },
@@ -171,6 +175,11 @@ export default function Pipeline() {
   const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState(null)
 
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } }),
+  )
+
   const load = () => {
     api('/api/contacts')
       .then(d => setContacts(d.contacts || []))
@@ -188,6 +197,20 @@ export default function Pipeline() {
     setContacts(prev => prev.filter(c => c.id !== id))
   }
 
+  async function handleDragEnd({ active, over }) {
+    if (!over) return
+    const newStage = over.id
+    const contact = contacts.find(c => c.id === active.id)
+    if (!contact || contact.stage === newStage) return
+    const prevStage = contact.stage
+    setContacts(prev => prev.map(c => c.id === active.id ? { ...c, stage: newStage } : c))
+    try {
+      await api(`/api/contacts/${active.id}`, { method: 'PATCH', body: { stage: newStage } })
+    } catch (e) {
+      setContacts(prev => prev.map(c => c.id === active.id ? { ...c, stage: prevStage } : c))
+    }
+  }
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {/* Header */}
@@ -199,42 +222,44 @@ export default function Pipeline() {
       </div>
 
       {/* Kanban */}
-      <div className="flex flex-1 overflow-x-auto scrollbar-none bg-warm-50">
-        {STAGES.map(stage => {
-          const cards = contacts.filter(c => c.stage === stage.key)
-          return (
-            <div key={stage.key} className="min-w-[240px] flex-1 flex flex-col border-r border-warm-200 last:border-r-0">
-              {/* Column header */}
-              <div className="px-4 py-3 bg-white border-b border-warm-200 flex items-center gap-2 flex-shrink-0">
-                <div className={`w-1.5 h-1.5 rounded-full ${stage.dot}`} />
-                <span className={`text-xs font-700 uppercase tracking-widest ${stage.color}`}>{stage.label}</span>
-                <span className="ml-auto text-xs font-600 text-warm-400 bg-warm-100 px-2 py-0.5 rounded-full">{cards.length}</span>
-              </div>
+      <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+        <div className="flex flex-1 overflow-x-auto scrollbar-none bg-warm-50">
+          {STAGES.map(stage => {
+            const cards = contacts.filter(c => c.stage === stage.key)
+            return (
+              <div key={stage.key} className="min-w-[240px] flex-1 flex flex-col border-r border-warm-200 last:border-r-0">
+                {/* Column header */}
+                <div className="px-4 py-3 bg-white border-b border-warm-200 flex items-center gap-2 flex-shrink-0">
+                  <div className={`w-1.5 h-1.5 rounded-full ${stage.dot}`} />
+                  <span className={`text-xs font-700 uppercase tracking-widest ${stage.color}`}>{stage.label}</span>
+                  <span className="ml-auto text-xs font-600 text-warm-400 bg-warm-100 px-2 py-0.5 rounded-full">{cards.length}</span>
+                </div>
 
-              {/* Cards */}
-              <div className="flex-1 overflow-y-auto p-2 space-y-2 scrollbar-none">
-                {loading && [1,2].map(i => (
-                  <div key={i} className="bg-white rounded-xl border border-warm-200 p-3 animate-pulse">
-                    <div className="h-3 bg-warm-100 rounded mb-2 w-3/4" />
-                    <div className="h-2.5 bg-warm-100 rounded w-1/2" />
-                  </div>
-                ))}
-                {!loading && cards.map((c, i) => (
-                  <ContactCard
-                    key={c.id}
-                    contact={c}
-                    avatarClass={AVATARS[i % 4]}
-                    onClick={() => setSelected(c)}
-                  />
-                ))}
-                {!loading && cards.length === 0 && (
-                  <div className="text-xs text-warm-300 text-center py-8">Nessun contatto</div>
-                )}
+                {/* Cards — droppable area */}
+                <DroppableColumn id={stage.key}>
+                  {loading && [1,2].map(i => (
+                    <div key={i} className="bg-white rounded-xl border border-warm-200 p-3 animate-pulse">
+                      <div className="h-3 bg-warm-100 rounded mb-2 w-3/4" />
+                      <div className="h-2.5 bg-warm-100 rounded w-1/2" />
+                    </div>
+                  ))}
+                  {!loading && cards.map((c, i) => (
+                    <ContactCard
+                      key={c.id}
+                      contact={c}
+                      avatarClass={AVATARS[i % 4]}
+                      onClick={() => setSelected(c)}
+                    />
+                  ))}
+                  {!loading && cards.length === 0 && (
+                    <div className="text-xs text-warm-300 text-center py-8">Nessun contatto</div>
+                  )}
+                </DroppableColumn>
               </div>
-            </div>
-          )
-        })}
-      </div>
+            )
+          })}
+        </div>
+      </DndContext>
 
       {/* Contact modal */}
       {selected && (
@@ -249,12 +274,32 @@ export default function Pipeline() {
   )
 }
 
+function DroppableColumn({ id, children }) {
+  const { setNodeRef, isOver } = useDroppable({ id })
+  return (
+    <div ref={setNodeRef}
+      className={`flex-1 overflow-y-auto p-2 space-y-2 scrollbar-none transition-colors rounded-b-lg ${isOver ? 'bg-brand-50/50 ring-2 ring-inset ring-brand-200' : ''}`}>
+      {children}
+    </div>
+  )
+}
+
 function ContactCard({ contact, avatarClass, onClick }) {
   const initials = contact.name?.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
   const openTasks = (contact.tasks || []).filter(t => !t.completed).slice(0, 2)
 
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: contact.id,
+    data: { stage: contact.stage },
+  })
+  const dragStyle = transform
+    ? { transform: `translate3d(${transform.x}px,${transform.y}px,0)`, zIndex: 50 }
+    : undefined
+
   return (
     <div
+      ref={setNodeRef} style={{ ...dragStyle, opacity: isDragging ? 0.45 : 1 }}
+      {...attributes} {...listeners}
       onClick={onClick}
       className="bg-white rounded-xl border border-warm-200 p-3 cursor-pointer hover:border-brand-300 hover:shadow-sm transition-all group/card"
     >

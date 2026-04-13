@@ -1,6 +1,10 @@
 import { useState, useEffect, useRef } from 'react'
 import { api } from '../../lib/api'
 import { useApp } from '../../App'
+import {
+  DndContext, PointerSensor, TouchSensor, useSensor, useSensors,
+  useDroppable, useDraggable,
+} from '@dnd-kit/core'
 
 // ── Costanti ──────────────────────────────────────────────────────────────────
 
@@ -660,9 +664,28 @@ const IDEA_PRI_CARD = {
   bassa: { bg: 'bg-yellow-50', border: 'border-yellow-200', borderL: 'border-l-yellow-400', divider: 'border-yellow-100',text: 'text-yellow-900',sub: 'text-yellow-500',btn: 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200' },
 }
 
+// ── Droppable column area ─────────────────────────────────────────────────────
+function DroppableColumn({ id, children }) {
+  const { setNodeRef, isOver } = useDroppable({ id })
+  return (
+    <div ref={setNodeRef}
+      className={`flex-1 overflow-y-auto p-2 scrollbar-none transition-colors rounded-b-lg ${isOver ? 'bg-brand-50/50 ring-2 ring-inset ring-brand-200' : ''}`}>
+      {children}
+    </div>
+  )
+}
+
 // ── Card Kanban ───────────────────────────────────────────────────────────────
 function ProjectCard({ project, col, onClick, onAdvance, onProponi }) {
   const [advancing, setAdvancing] = useState(false)
+
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: project.id,
+    data: { stage: project.stage },
+  })
+  const dragStyle = transform
+    ? { transform: `translate3d(${transform.x}px,${transform.y}px,0)`, zIndex: 50 }
+    : undefined
 
   async function handleAdvance(e) {
     e.stopPropagation()
@@ -679,7 +702,9 @@ function ProjectCard({ project, col, onClick, onAdvance, onProponi }) {
   const pri = col.key === 'idea' ? (IDEA_PRI_CARD[project.priority] || null) : null
 
   return (
-    <div onClick={onClick}
+    <div ref={setNodeRef} style={{ ...dragStyle, opacity: isDragging ? 0.45 : 1 }}
+      {...attributes} {...listeners}
+      onClick={onClick}
       className={`rounded-xl border border-l-4 p-3 cursor-pointer hover:shadow-md transition-all
         ${pri
           ? `${pri.bg} ${pri.border} ${pri.borderL}`
@@ -726,6 +751,11 @@ export default function Projects({ onProponiPipeline }) {
   const [syncResult, setSyncResult]   = useState(null)
   const fileInputRef = useRef(null)
 
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } }),
+  )
+
   const load = () => api('/api/projects')
     .then(d => setProjects(d.projects || []))
     .catch(() => {})
@@ -745,6 +775,20 @@ export default function Projects({ onProponiPipeline }) {
   }
   function handleAdvanced(project) {
     setProjects(prev => prev.map(p => p.id === project.id ? { ...p, ...project } : p))
+  }
+
+  async function handleDragEnd({ active, over }) {
+    if (!over) return
+    const newStage = over.id
+    const project = projects.find(p => p.id === active.id)
+    if (!project || project.stage === newStage) return
+    const prevStage = project.stage
+    setProjects(prev => prev.map(p => p.id === active.id ? { ...p, stage: newStage } : p))
+    try {
+      await api(`/api/projects/${active.id}`, { method: 'PATCH', body: { stage: newStage } })
+    } catch (e) {
+      setProjects(prev => prev.map(p => p.id === active.id ? { ...p, stage: prevStage } : p))
+    }
   }
 
   async function handleDedup() {
@@ -847,55 +891,60 @@ export default function Projects({ onProponiPipeline }) {
       )}
 
       {/* Kanban */}
-      <div className="flex flex-1 overflow-x-auto scrollbar-none bg-warm-50">
-        {COLUMNS.map(col => {
-          let cards = filtered.filter(p =>
-            p.stage === col.key || (col.key === 'sviluppo' && p.stage === 'test')
-          )
-          // Ordina le idee per priorità: alta → media → bassa
-          if (col.key === 'idea') {
-            cards = [...cards].sort((a, b) =>
-              (PRI_ORDER[a.priority] ?? 99) - (PRI_ORDER[b.priority] ?? 99)
+      <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+        <div className="flex flex-1 overflow-x-auto scrollbar-none bg-warm-50">
+          {COLUMNS.map(col => {
+            let cards = filtered.filter(p =>
+              p.stage === col.key || (col.key === 'sviluppo' && p.stage === 'test')
             )
-          }
-          return (
-            <div key={col.key} className="flex-1 min-w-[240px] flex flex-col border-r border-warm-200 last:border-r-0">
-              <div className={`px-3 py-3 ${col.headerBg} border-b ${col.border} flex items-center gap-2 flex-shrink-0`}>
-                <div className={`w-2 h-2 rounded-full ${col.dot}`}/>
-                <span className={`text-xs font-700 uppercase tracking-widest ${col.color}`}>{col.label}</span>
-                <span className={`ml-auto text-xs font-700 ${col.color} bg-white/60 px-2 py-0.5 rounded-full`}>{cards.length}</span>
-              </div>
-              <div className="flex-1 overflow-y-auto p-2 scrollbar-none">
-                {loading && [1,2].map(i => <div key={i} className="bg-white rounded-xl border border-warm-200 p-3 mb-2 animate-pulse h-20"/>)}
-                {!loading && (
-                  <div className="space-y-2">
-                    {cards.map(p => (
-                      <ProjectCard key={p.id} project={p} col={col}
-                        onClick={() => {
-                          if (col.key === 'sviluppo') {
-                            setSviluppoView(p)
-                          } else if (col.key === 'idea') {
-                            setModal({ type: 'idea', project: p })
-                          } else {
-                            setModal({ type: 'pronto', project: p })
-                          }
-                        }}
-                        onAdvance={handleAdvanced}
-                        onProponi={p => { onProponiPipeline?.(p) }}
-                      />
-                    ))}
-                    {cards.length === 0 && (
-                      <div className={`text-xs ${col.emptyColor} opacity-40 text-center py-10 border-2 border-dashed ${col.border} rounded-xl`}>
-                        Nessun progetto
-                      </div>
-                    )}
+            if (col.key === 'idea') {
+              cards = [...cards].sort((a, b) =>
+                (PRI_ORDER[a.priority] ?? 99) - (PRI_ORDER[b.priority] ?? 99)
+              )
+            }
+            return (
+              <div key={col.key} className="flex-1 min-w-[240px] flex flex-col border-r border-warm-200 last:border-r-0">
+                <div className={`px-3 py-3 ${col.headerBg} border-b ${col.border} flex items-center gap-2 flex-shrink-0`}>
+                  <div className={`w-2 h-2 rounded-full ${col.dot}`}/>
+                  <span className={`text-xs font-700 uppercase tracking-widest ${col.color}`}>{col.label}</span>
+                  <span className={`ml-auto text-xs font-700 ${col.color} bg-white/60 px-2 py-0.5 rounded-full`}>{cards.length}</span>
+                </div>
+                {loading && (
+                  <div className="p-2 space-y-2">
+                    {[1,2].map(i => <div key={i} className="bg-white rounded-xl border border-warm-200 p-3 animate-pulse h-20"/>)}
                   </div>
                 )}
+                {!loading && (
+                  <DroppableColumn id={col.key}>
+                    <div className="space-y-2">
+                      {cards.map(p => (
+                        <ProjectCard key={p.id} project={p} col={col}
+                          onClick={() => {
+                            if (col.key === 'sviluppo') {
+                              setSviluppoView(p)
+                            } else if (col.key === 'idea') {
+                              setModal({ type: 'idea', project: p })
+                            } else {
+                              setModal({ type: 'pronto', project: p })
+                            }
+                          }}
+                          onAdvance={handleAdvanced}
+                          onProponi={p => { onProponiPipeline?.(p) }}
+                        />
+                      ))}
+                      {cards.length === 0 && (
+                        <div className={`text-xs ${col.emptyColor} opacity-40 text-center py-10 border-2 border-dashed ${col.border} rounded-xl`}>
+                          Nessun progetto
+                        </div>
+                      )}
+                    </div>
+                  </DroppableColumn>
+                )}
               </div>
-            </div>
-          )
-        })}
-      </div>
+            )
+          })}
+        </div>
+      </DndContext>
 
       {/* Modals */}
       {modal?.type === 'idea' && (
