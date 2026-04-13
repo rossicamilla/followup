@@ -703,16 +703,28 @@ function ProjectCard({ project, col, onClick, onAdvance, onProponi }) {
 
   return (
     <div ref={setNodeRef} style={{ ...dragStyle, opacity: isDragging ? 0.45 : 1 }}
-      {...attributes} {...listeners}
+      {...attributes}
       onClick={onClick}
-      className={`rounded-xl border border-l-4 p-3 cursor-pointer hover:shadow-md transition-all
+      className={`group/card rounded-xl border border-l-4 p-3 cursor-pointer hover:shadow-md transition-all
         ${pri
           ? `${pri.bg} ${pri.border} ${pri.borderL}`
           : `bg-white border-warm-200 ${col.cardBorder}`
         }`}>
 
-      <div className={`font-600 text-sm mb-1.5 leading-snug ${pri ? pri.text : 'text-warm-900'}`}>
-        {project.name}
+      <div className="flex items-start justify-between gap-1 mb-1.5">
+        <div className={`font-600 text-sm leading-snug flex-1 min-w-0 ${pri ? pri.text : 'text-warm-900'}`}>
+          {project.name}
+        </div>
+        {/* Drag handle */}
+        <div {...listeners}
+          onClick={e => e.stopPropagation()}
+          className="opacity-0 group-hover/card:opacity-100 transition-opacity cursor-grab active:cursor-grabbing p-1 rounded-lg hover:bg-black/5 touch-none flex-shrink-0 -mr-1 -mt-0.5">
+          <svg viewBox="0 0 8 14" fill="currentColor" className="w-2.5 h-3.5 text-warm-400">
+            <circle cx="2" cy="2" r="1.1"/><circle cx="6" cy="2" r="1.1"/>
+            <circle cx="2" cy="7" r="1.1"/><circle cx="6" cy="7" r="1.1"/>
+            <circle cx="2" cy="12" r="1.1"/><circle cx="6" cy="12" r="1.1"/>
+          </svg>
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-1 mb-2">

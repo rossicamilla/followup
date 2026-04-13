@@ -299,7 +299,7 @@ function ContactCard({ contact, avatarClass, onClick }) {
   return (
     <div
       ref={setNodeRef} style={{ ...dragStyle, opacity: isDragging ? 0.45 : 1 }}
-      {...attributes} {...listeners}
+      {...attributes}
       onClick={onClick}
       className="bg-white rounded-xl border border-warm-200 p-3 cursor-pointer hover:border-brand-300 hover:shadow-sm transition-all group/card"
     >
@@ -311,10 +311,16 @@ function ContactCard({ contact, avatarClass, onClick }) {
           <div className="text-sm font-600 text-warm-900 truncate">{contact.name}</div>
           <div className="text-xs text-warm-400 truncate">{contact.company}</div>
         </div>
-        {/* Edit hint */}
-        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5 text-warm-300 opacity-0 group-hover/card:opacity-100 transition-opacity flex-shrink-0">
-          <path d="M11 2l3 3-8 8H3v-3l8-8z"/>
-        </svg>
+        {/* Drag handle */}
+        <div {...listeners}
+          onClick={e => e.stopPropagation()}
+          className="opacity-0 group-hover/card:opacity-100 transition-opacity cursor-grab active:cursor-grabbing p-1 rounded-lg hover:bg-warm-100 touch-none flex-shrink-0">
+          <svg viewBox="0 0 8 14" fill="currentColor" className="w-2.5 h-3.5 text-warm-400">
+            <circle cx="2" cy="2" r="1.1"/><circle cx="6" cy="2" r="1.1"/>
+            <circle cx="2" cy="7" r="1.1"/><circle cx="6" cy="7" r="1.1"/>
+            <circle cx="2" cy="12" r="1.1"/><circle cx="6" cy="12" r="1.1"/>
+          </svg>
+        </div>
       </div>
 
       {contact.owner && (
