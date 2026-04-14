@@ -484,23 +484,26 @@ function SviluppoView({ project: initialProject, onBack, onSaved, onDeleted, onA
     onBack()
   }
 
+  // Indice del primo step non completato (step "corrente")
+  const currentIdx = steps.findIndex(s => !s.completed)
+
   return (
     <div className="flex flex-col h-full overflow-hidden bg-white">
 
       {/* ── Header ── */}
-      <div className="px-5 py-3 bg-blue-50 border-b border-blue-200 flex items-center gap-2 flex-shrink-0">
+      <div className="px-5 py-3 bg-white border-b border-warm-200 flex items-center gap-2 flex-shrink-0">
         <button onClick={onBack}
-          className="flex items-center gap-1 text-xs font-600 text-blue-500 hover:text-blue-800 transition-colors flex-shrink-0">
+          className="flex items-center gap-1 text-xs font-600 text-warm-400 hover:text-warm-800 transition-colors flex-shrink-0">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5"><path d="M10 3L5 8l5 5"/></svg>
           Progetti
         </button>
-        <span className="text-warm-300 text-xs">/</span>
+        <span className="text-warm-200 text-xs">/</span>
         {editingName ? (
           <input value={name} onChange={e => setName(e.target.value)}
             onBlur={saveName} onKeyDown={e => { if (e.key === 'Enter') saveName() }} autoFocus
             className="font-700 text-sm text-warm-900 border border-blue-300 rounded px-2 py-0.5 focus:outline-none bg-white min-w-0 flex-1"/>
         ) : (
-          <span className="font-700 text-sm text-warm-900 cursor-pointer hover:text-blue-700 transition-colors truncate flex-1"
+          <span className="font-700 text-sm text-warm-900 cursor-pointer hover:text-blue-600 transition-colors truncate flex-1"
             onClick={() => setEditingName(true)}>
             {project.name}
           </span>
@@ -518,60 +521,49 @@ function SviluppoView({ project: initialProject, onBack, onSaved, onDeleted, onA
           <button onClick={advance} disabled={advancing}
             className={`text-xs font-700 rounded-lg px-4 py-1.5 transition-all flex items-center gap-1.5
               ${allDone ? 'bg-emerald-500 hover:bg-emerald-600 text-white' : 'bg-blue-100 hover:bg-blue-200 text-blue-700'} disabled:opacity-40`}>
-            {advancing ? '...' : <><span>Pronto</span><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" className="w-3 h-3"><path d="M3 8h10M9 4l4 4-4 4"/></svg></>}
+            {advancing ? '...' : <><span>Segna Pronto</span><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" className="w-3 h-3"><path d="M3 8h10M9 4l4 4-4 4"/></svg></>}
           </button>
         </div>
       </div>
 
-      {/* ── Metadati + Progress ── */}
-      <div className="px-5 py-2.5 border-b border-warm-100 bg-white flex-shrink-0">
+      {/* ── Metadati + barra progresso ── */}
+      <div className="px-5 py-2.5 border-b border-warm-100 bg-warm-50 flex-shrink-0">
         <div className="flex items-center gap-4 mb-2">
-          {project.supplier && (
-            <span className="text-xs text-warm-500"><span className="text-warm-300">Forn. </span>{project.supplier}</span>
-          )}
-          {project.client && (
-            <span className="text-xs text-warm-500"><span className="text-warm-300">Buy. </span>{project.client}</span>
-          )}
-          {project.weight_format && (
-            <span className="text-xs text-warm-400">{project.weight_format}</span>
-          )}
+          {project.supplier && <span className="text-xs text-warm-500"><span className="text-warm-300 mr-0.5">Forn.</span>{project.supplier}</span>}
+          {project.client   && <span className="text-xs text-warm-500"><span className="text-warm-300 mr-0.5">Buy.</span>{project.client}</span>}
+          {project.weight_format && <span className="text-xs text-warm-400">{project.weight_format}</span>}
           <div className="flex-1"/>
-          <span className="text-xs text-warm-400">{done}/{steps.length} step</span>
+          <span className="text-xs text-warm-400">{done} / {steps.length} completati</span>
           <span className="text-xs font-700 text-blue-600">{pct}%</span>
         </div>
-        <div className="h-1.5 bg-warm-100 rounded-full overflow-hidden">
+        <div className="h-1.5 bg-warm-200 rounded-full overflow-hidden">
           <div className="h-full rounded-full transition-all duration-500"
-            style={{ width: `${pct}%`, background: pct === 100 ? '#10b981' : '#60a5fa' }}/>
+            style={{ width: `${pct}%`, background: pct === 100 ? '#10b981' : '#3b82f6' }}/>
         </div>
       </div>
 
-      {/* ── Contenuto ── */}
+      {/* ── Contenuto scrollabile ── */}
       <div className="flex-1 overflow-y-auto scrollbar-none">
-        <div className="max-w-2xl mx-auto px-5 py-4 space-y-2">
+        <div className="max-w-xl mx-auto px-6 pt-5 pb-10">
 
-          {/* Riepilogo email (note del progetto) */}
+          {/* Riepilogo email */}
           {notes && !editingNotes && (
-            <div className="flex gap-3 bg-indigo-50 border border-indigo-200 rounded-xl px-4 py-3 mb-3">
-              <div className="w-6 h-6 rounded-full bg-indigo-100 border border-indigo-200 flex items-center justify-center flex-shrink-0 mt-0.5">
-                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5 text-indigo-600">
-                  <path d="M8 2C6.3 2 5 3.3 5 5c0 1 .5 1.9 1.3 2.4L6 9h4l-.3-1.6C10.5 6.9 11 6 11 5c0-1.7-1.3-3-3-3z"/>
-                  <path d="M6.5 10.5h3v1.5h-3z"/>
-                </svg>
+            <div className="flex gap-3 bg-indigo-50 border border-indigo-200 rounded-xl px-4 py-3 mb-6">
+              <div className="w-6 h-6 rounded-full bg-indigo-200 flex items-center justify-center flex-shrink-0 mt-0.5 text-indigo-700">
+                <svg viewBox="0 0 16 16" fill="currentColor" className="w-3 h-3"><path d="M8 1a2 2 0 0 1 1.416 3.408L9 9H7l-.416-4.592A2 2 0 0 1 8 1zm-.5 9.5h1v1h-1zm0 2h1v1h-1z"/></svg>
               </div>
               <div className="flex-1 min-w-0">
                 <div className="text-2xs font-700 text-indigo-500 uppercase tracking-wider mb-1">Riepilogo email</div>
                 <p className="text-sm text-indigo-900 leading-relaxed whitespace-pre-wrap">{notes}</p>
               </div>
-              <button onClick={() => setEditingNotes(true)}
+              <button onClick={() => setEditingNotes(true)} title="Modifica"
                 className="text-indigo-300 hover:text-indigo-600 p-1 flex-shrink-0 self-start transition-colors">
-                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5">
-                  <path d="M10.5 2.5l3 3-8 8H2.5v-3l8-8z"/>
-                </svg>
+                <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5"><path d="M10.5 2.5l3 3-8 8H2.5v-3l8-8z"/></svg>
               </button>
             </div>
           )}
           {editingNotes && (
-            <div className="bg-indigo-50 border border-indigo-200 rounded-xl px-4 py-3 mb-3">
+            <div className="bg-indigo-50 border border-indigo-200 rounded-xl px-4 py-3 mb-6">
               <div className="text-2xs font-700 text-indigo-500 uppercase tracking-wider mb-2">Riepilogo email</div>
               <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={4} autoFocus
                 className="w-full text-sm border border-indigo-200 rounded-lg px-3 py-2 focus:outline-none focus:border-indigo-400 bg-white resize-none"/>
@@ -583,87 +575,117 @@ function SviluppoView({ project: initialProject, onBack, onSaved, onDeleted, onA
           )}
           {!notes && !editingNotes && (
             <button onClick={() => setEditingNotes(true)}
-              className="w-full text-left text-xs text-warm-300 hover:text-indigo-500 flex items-center gap-1.5 px-1 mb-1 transition-colors">
+              className="text-xs text-warm-300 hover:text-indigo-500 flex items-center gap-1.5 mb-5 transition-colors">
               <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5"><path d="M10.5 2.5l3 3-8 8H2.5v-3l8-8z"/></svg>
-              Aggiungi note / riepilogo
+              Aggiungi note
             </button>
           )}
 
-          {/* Step list */}
-          {steps.map((step, i) => (
-            <div key={step.id}
-              className={`group rounded-xl border transition-all ${step.completed ? 'bg-warm-50 border-warm-100 opacity-70' : 'bg-white border-warm-200 hover:border-blue-200 hover:shadow-sm'}`}>
-              <div className="flex items-center gap-3 px-4 py-3">
-                <button onClick={() => toggleStep(step.id)} className="flex-shrink-0">
-                  <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all
-                    ${step.completed ? 'bg-emerald-500 border-emerald-500' : 'border-warm-300 hover:border-blue-400'}`}>
-                    {step.completed && (
-                      <svg viewBox="0 0 10 10" fill="none" className="w-3 h-3">
-                        <path d="M2 5l2.5 2.5L8 3" stroke="white" strokeWidth="1.5"/>
-                      </svg>
-                    )}
+          {/* ── Timeline ── */}
+          <div className="relative">
+            {/* Linea verticale di sfondo */}
+            <div className="absolute left-[11px] top-3 bottom-3 w-0.5 bg-warm-200 rounded-full"/>
+
+            {steps.map((step, i) => {
+              const isActive  = i === currentIdx
+              const isFuture  = !step.completed && i > currentIdx
+              return (
+                <div key={step.id} className="group relative flex gap-4 mb-1">
+
+                  {/* Nodo della timeline */}
+                  <div className="flex-shrink-0 flex flex-col items-center z-10 pt-3">
+                    <button onClick={() => toggleStep(step.id)}
+                      className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all
+                        ${step.completed
+                          ? 'bg-emerald-500 border-emerald-500 shadow-sm shadow-emerald-200'
+                          : isActive
+                          ? 'bg-white border-blue-500 shadow-sm shadow-blue-100 ring-4 ring-blue-50'
+                          : 'bg-white border-warm-300 hover:border-blue-300'}`}>
+                      {step.completed
+                        ? <svg viewBox="0 0 10 10" fill="none" className="w-3 h-3"><path d="M2 5l2.5 2.5L8 3" stroke="white" strokeWidth="1.8"/></svg>
+                        : isActive
+                        ? <div className="w-2 h-2 rounded-full bg-blue-500"/>
+                        : null}
+                    </button>
                   </div>
-                </button>
-                <span className={`text-2xs font-700 w-4 text-center flex-shrink-0 ${step.completed ? 'text-warm-300' : 'text-warm-400'}`}>{i + 1}</span>
-                <span className={`flex-1 text-sm font-600 leading-snug min-w-0 ${step.completed ? 'line-through text-warm-400' : 'text-warm-900'}`}>
-                  {step.title}
-                </span>
-                {step.completed && step.completed_at && (
-                  <span className="text-xs text-warm-300 flex-shrink-0 hidden sm:block">
-                    {new Date(step.completed_at).toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })}
-                  </span>
-                )}
-                <button onClick={() => { setEditingStepId(step.id); setStepNotesValue(step.notes || '') }}
-                  title="Note"
-                  className={`p-1 rounded-lg transition-all flex-shrink-0
-                    ${step.notes ? 'text-blue-400 hover:text-blue-600' : 'text-warm-200 hover:text-blue-400 opacity-0 group-hover:opacity-100'}`}>
-                  <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5">
-                    <path d="M10.5 2.5l3 3-8 8H2.5v-3l8-8z"/>
-                  </svg>
-                </button>
-                {profile?.role === 'admin' && (
-                  <button onClick={() => removeStep(step.id)}
-                    className="opacity-0 group-hover:opacity-100 text-warm-200 hover:text-red-400 transition-all p-1 flex-shrink-0">
-                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+
+                  {/* Contenuto */}
+                  <div className={`flex-1 min-w-0 pb-5 ${isFuture ? 'opacity-45' : ''}`}>
+                    <div className="flex items-start gap-2 pt-2.5">
+                      <span className={`flex-1 text-sm font-600 leading-snug
+                        ${step.completed ? 'line-through text-warm-400' : isActive ? 'text-blue-700' : 'text-warm-800'}`}>
+                        {step.title}
+                      </span>
+
+                      {/* Data completamento */}
+                      {step.completed && step.completed_at && (
+                        <span className="text-xs text-warm-300 flex-shrink-0 whitespace-nowrap mt-0.5">
+                          {new Date(step.completed_at).toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })}
+                        </span>
+                      )}
+
+                      {/* Bottone note */}
+                      <button onClick={() => { setEditingStepId(step.id); setStepNotesValue(step.notes || '') }}
+                        className={`p-1 rounded transition-all flex-shrink-0 mt-0.5
+                          ${step.notes ? 'text-blue-400 hover:text-blue-600' : 'text-warm-200 hover:text-warm-400 opacity-0 group-hover:opacity-100'}`}>
+                        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3 h-3"><path d="M10.5 2.5l3 3-8 8H2.5v-3l8-8z"/></svg>
+                      </button>
+
+                      {/* Bottone elimina */}
+                      {profile?.role === 'admin' && (
+                        <button onClick={() => removeStep(step.id)}
+                          className="p-1 rounded transition-all flex-shrink-0 mt-0.5 text-warm-200 hover:text-red-400 opacity-0 group-hover:opacity-100">
+                          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3 h-3"><path d="M4 4l8 8M12 4l-8 8"/></svg>
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Note step — visualizzazione */}
+                    {editingStepId === step.id ? (
+                      <div className="mt-2">
+                        <textarea value={stepNotesValue} onChange={e => setStepNotesValue(e.target.value)}
+                          placeholder="Note su questo step..." rows={2} autoFocus
+                          className="w-full text-sm border border-blue-200 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-400 bg-blue-50 resize-none"/>
+                        <div className="flex gap-2 mt-1.5">
+                          <button onClick={() => saveStepNotes(step.id)}
+                            className="text-xs font-600 bg-blue-500 text-white px-3 py-1 rounded-lg hover:bg-blue-600">Salva</button>
+                          <button onClick={() => setEditingStepId(null)}
+                            className="text-xs text-warm-400 hover:text-warm-600 px-2 py-1">Annulla</button>
+                        </div>
+                      </div>
+                    ) : step.notes ? (
+                      <p className="mt-1.5 text-xs text-warm-500 leading-relaxed bg-warm-50 rounded-lg px-3 py-2 border border-warm-100">
+                        {step.notes}
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+              )
+            })}
+
+            {/* Aggiungi step — nodo in fondo alla timeline */}
+            <div className="relative flex gap-4">
+              <div className="flex-shrink-0 z-10 pt-2">
+                <div className="w-6 h-6 rounded-full border-2 border-dashed border-warm-300 bg-white flex items-center justify-center">
+                  <svg viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3 h-3 text-warm-300"><path d="M5 2v6M2 5h6"/></svg>
+                </div>
+              </div>
+              <form onSubmit={addStep} className="flex-1 flex items-center gap-2 pt-1.5 pb-4">
+                <input value={newStepTitle} onChange={e => setNewStepTitle(e.target.value)}
+                  placeholder="Aggiungi step..."
+                  className="flex-1 text-sm text-warm-600 bg-transparent focus:outline-none placeholder-warm-300 border-b border-transparent focus:border-warm-300 pb-0.5 transition-colors"/>
+                {newStepTitle.trim() && (
+                  <button type="submit"
+                    className="text-xs font-600 bg-blue-100 text-blue-700 hover:bg-blue-200 px-3 py-1.5 rounded-lg transition-colors flex-shrink-0">
+                    Aggiungi
                   </button>
                 )}
-              </div>
-              {editingStepId === step.id ? (
-                <div className="px-4 pb-3 border-t border-warm-100">
-                  <textarea value={stepNotesValue} onChange={e => setStepNotesValue(e.target.value)}
-                    placeholder="Note su questo step..." rows={2} autoFocus
-                    className="w-full text-sm border border-blue-200 rounded-lg px-3 py-2 mt-2 focus:outline-none focus:border-blue-400 bg-blue-50 resize-none"/>
-                  <div className="flex gap-2 mt-1.5">
-                    <button onClick={() => saveStepNotes(step.id)}
-                      className="text-xs font-600 bg-blue-500 text-white px-3 py-1 rounded-lg hover:bg-blue-600">Salva</button>
-                    <button onClick={() => setEditingStepId(null)}
-                      className="text-xs text-warm-400 hover:text-warm-600 px-2 py-1">Annulla</button>
-                  </div>
-                </div>
-              ) : step.notes ? (
-                <div className="px-4 pb-3 border-t border-warm-100">
-                  <p className="text-xs text-warm-500 mt-2 leading-relaxed">{step.notes}</p>
-                </div>
-              ) : null}
+              </form>
             </div>
-          ))}
-
-          {/* Aggiungi step */}
-          <form onSubmit={addStep} className="flex items-center gap-3 px-4 py-3 rounded-xl border border-dashed border-warm-200 hover:border-blue-300 transition-colors">
-            <div className="w-5 h-5 rounded-full border-2 border-dashed border-warm-300 flex items-center justify-center flex-shrink-0">
-              <svg viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3 h-3 text-warm-300"><path d="M5 2v6M2 5h6"/></svg>
-            </div>
-            <input value={newStepTitle} onChange={e => setNewStepTitle(e.target.value)}
-              placeholder="Aggiungi step..."
-              className="flex-1 text-sm text-warm-600 bg-transparent focus:outline-none placeholder-warm-300"/>
-            <button type="submit" disabled={!newStepTitle.trim()}
-              className="text-xs font-600 bg-blue-100 text-blue-700 hover:bg-blue-200 disabled:opacity-30 px-3 py-1.5 rounded-lg transition-colors">
-              Aggiungi
-            </button>
-          </form>
+          </div>
 
           {/* Pronto in fondo */}
-          <div className="pt-4 pb-6 flex justify-end">
+          <div className="pt-2 flex justify-end">
             <button onClick={advance} disabled={advancing}
               className={`text-sm font-700 rounded-xl px-8 py-3 transition-all flex items-center gap-2 shadow-sm
                 ${allDone ? 'bg-emerald-500 hover:bg-emerald-600 text-white shadow-emerald-200' : 'bg-blue-100 hover:bg-blue-200 text-blue-700'}
@@ -671,6 +693,7 @@ function SviluppoView({ project: initialProject, onBack, onSaved, onDeleted, onA
               {advancing ? '...' : <><span>Segna come Pronto</span><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4"><path d="M3 8h10M9 4l4 4-4 4"/></svg></>}
             </button>
           </div>
+
         </div>
       </div>
     </div>
