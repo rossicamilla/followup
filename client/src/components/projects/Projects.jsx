@@ -1,12 +1,10 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef } from 'react' // useRef usato per fileInputRef
 import { api } from '../../lib/api'
 import { useApp } from '../../App'
 import {
   DndContext, PointerSensor, TouchSensor, useSensor, useSensors,
-  useDroppable, closestCenter, DragOverlay,
+  useDroppable, useDraggable, DragOverlay,
 } from '@dnd-kit/core'
-import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
-import { CSS } from '@dnd-kit/utilities'
 
 // ── Costanti ──────────────────────────────────────────────────────────────────
 
@@ -49,7 +47,7 @@ const COLUMNS = [
   },
 ]
 
-const MARKETS = ['Retail', 'Horeca', 'Export', 'Interno']
+const MARKETS = ['Horeca', 'Retail']
 const MARKET_COLORS = {
   Retail:  'bg-violet-100 text-violet-700',
   Horeca:  'bg-orange-100 text-orange-700',
@@ -680,12 +678,12 @@ function DroppableColumn({ id, children }) {
 function ProjectCard({ project, col, onClick, onAdvance, onProponi, compact }) {
   const [advancing, setAdvancing] = useState(false)
 
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: project.id })
-  const dragStyle = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0 : 1,  // invisibile: il DragOverlay fa da copia visibile
-  }
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: project.id })
+  const dragStyle = isDragging
+    ? { opacity: 0 }
+    : transform
+    ? { transform: `translate3d(${transform.x}px,${transform.y}px,0)` }
+    : undefined
 
   async function handleAdvance(e) {
     e.stopPropagation()
@@ -778,9 +776,8 @@ export default function Projects({ onProponiPipeline }) {
   const [syncing, setSyncing]         = useState(false)
   const [deduping, setDeduping]       = useState(false)
   const [syncResult, setSyncResult]   = useState(null)
-  const [activeId, setActiveId]       = useState(null)
-  const originalStageRef = useRef(null)   // ref evita stale closure in handleDragEnd
-  const currentStageRef  = useRef(null)
+  const [activeId, setActiveId]   = useState(null)
+  const [overColId, setOverColId] = useState(null)
   const fileInputRef = useRef(null)
 
   const sensors = useSensors(
@@ -819,56 +816,18 @@ export default function Projects({ onProponiPipeline }) {
     setProjects(prev => prev.map(p => p.id === project.id ? { ...p, ...project } : p))
   }
 
-  function handleDragStart({ active }) {
-    setActiveId(active.id)
-    const p = projects.find(x => x.id === active.id)
-    originalStageRef.current = p?.stage ?? null
-    currentStageRef.current  = p?.stage ?? null
-  }
+  function handleDragStart({ active }) { setActiveId(active.id) }
+  function handleDragOver({ over })   { setOverColId(over?.id ?? null) }
 
-  function handleDragOver({ active, over }) {
-    if (!over || active.id === over.id) return
-
-    setProjects(prev => {
-      const activeProj = prev.find(p => p.id === active.id)
-      if (!activeProj) return prev
-
-      const overIsColumn = COLUMNS.some(c => c.key === over.id)
-
-      if (overIsColumn) {
-        if (activeProj.stage === over.id) return prev
-        currentStageRef.current = over.id
-        return prev.map(p => p.id === active.id ? { ...p, stage: over.id } : p)
-      }
-
-      const overProj = prev.find(p => p.id === over.id)
-      if (!overProj) return prev
-
-      if (activeProj.stage !== overProj.stage) {
-        currentStageRef.current = overProj.stage
-        const from = prev.findIndex(p => p.id === active.id)
-        const to   = prev.findIndex(p => p.id === over.id)
-        const next = [...prev]
-        next.splice(from, 1)
-        next.splice(to, 0, { ...activeProj, stage: overProj.stage })
-        return next
-      } else {
-        const from = prev.findIndex(p => p.id === active.id)
-        const to   = prev.findIndex(p => p.id === over.id)
-        return arrayMove(prev, from, to)
-      }
-    })
-  }
-
-  async function handleDragEnd({ active }) {
-    setActiveId(null)
-    const newStage  = currentStageRef.current
-    const origStage = originalStageRef.current
-    originalStageRef.current = null
-    currentStageRef.current  = null
-
-    if (!newStage || newStage === origStage) return
-
+  async function handleDragEnd({ active, over }) {
+    setActiveId(null); setOverColId(null)
+    if (!over) return
+    const newStage = over.id  // sempre una column key
+    // projects non è mai stato modificato durante il drag → nessun stale closure
+    const proj = projects.find(p => p.id === active.id)
+    if (!proj || proj.stage === newStage) return
+    const origStage = proj.stage
+    setProjects(prev => prev.map(p => p.id === active.id ? { ...p, stage: newStage } : p))
     try {
       await api(`/api/projects/${active.id}`, { method: 'PATCH', body: { stage: newStage } })
     } catch {
@@ -995,7 +954,7 @@ export default function Projects({ onProponiPipeline }) {
       )}
 
       {/* Kanban */}
-      <DndContext sensors={sensors} collisionDetection={closestCenter}
+      <DndContext sensors={sensors}
         onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd}>
         <div className="flex flex-1 overflow-x-auto scrollbar-none bg-warm-50">
           {COLUMNS.map(col => {
@@ -1003,7 +962,7 @@ export default function Projects({ onProponiPipeline }) {
               p.stage === col.key || (col.key === 'sviluppo' && p.stage === 'test')
             )
             return (
-              <div key={col.key} className="flex-1 min-w-[240px] flex flex-col border-r border-warm-200 last:border-r-0">
+              <div key={col.key} className={`flex-1 min-w-[240px] flex flex-col border-r border-warm-200 last:border-r-0 transition-colors duration-100 ${overColId === col.key && activeId ? 'bg-blue-50/50' : ''}`}>
                 <div className={`px-3 py-3 ${col.headerBg} border-b ${col.border} flex items-center gap-2 flex-shrink-0`}>
                   <div className={`w-2 h-2 rounded-full ${col.dot}`}/>
                   <span className={`text-xs font-700 uppercase tracking-widest ${col.color}`}>{col.label}</span>
@@ -1016,27 +975,25 @@ export default function Projects({ onProponiPipeline }) {
                 )}
                 {!loading && (
                   <DroppableColumn id={col.key}>
-                    <SortableContext items={cards.map(p => p.id)} strategy={verticalListSortingStrategy}>
-                      <div className="space-y-1.5">
-                        {cards.map(p => (
-                          <ProjectCard key={p.id} project={p} col={col} compact={compact}
-                            onClick={() => {
-                              if (activeId) return  // ignora click durante drag
-                              if (col.key === 'sviluppo') setSviluppoView(p)
-                              else if (col.key === 'idea') setModal({ type: 'idea', project: p })
-                              else setModal({ type: 'pronto', project: p })
-                            }}
-                            onAdvance={handleAdvanced}
-                            onProponi={p => { onProponiPipeline?.(p) }}
-                          />
-                        ))}
-                        {cards.length === 0 && (
-                          <div className={`text-xs ${col.emptyColor} opacity-40 text-center py-10 border-2 border-dashed ${col.border} rounded-xl`}>
-                            Nessun progetto
-                          </div>
-                        )}
-                      </div>
-                    </SortableContext>
+                    <div className="space-y-1.5">
+                      {cards.map(p => (
+                        <ProjectCard key={p.id} project={p} col={col} compact={compact}
+                          onClick={() => {
+                            if (activeId) return
+                            if (col.key === 'sviluppo') setSviluppoView(p)
+                            else if (col.key === 'idea') setModal({ type: 'idea', project: p })
+                            else setModal({ type: 'pronto', project: p })
+                          }}
+                          onAdvance={handleAdvanced}
+                          onProponi={p => { onProponiPipeline?.(p) }}
+                        />
+                      ))}
+                      {cards.length === 0 && (
+                        <div className={`text-xs ${col.emptyColor} opacity-40 text-center py-10 border-2 border-dashed ${col.border} rounded-xl`}>
+                          Nessun progetto
+                        </div>
+                      )}
+                    </div>
                   </DroppableColumn>
                 )}
               </div>

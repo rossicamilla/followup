@@ -3,7 +3,7 @@ import { api } from '../../lib/api'
 import { useApp } from '../../App'
 import {
   DndContext, PointerSensor, TouchSensor, useSensor, useSensors,
-  useDroppable, useDraggable, pointerWithin,
+  useDroppable, useDraggable,
 } from '@dnd-kit/core'
 
 const STAGES = [
@@ -739,7 +739,7 @@ export default function ProductPipeline({ preProject, onModalClose }) {
 
       {/* Kanban */}
       {tab === 'kanban' && (
-        <DndContext sensors={sensors} collisionDetection={pointerWithin} onDragEnd={handleDragEnd}>
+        <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
           <div className="flex flex-1 overflow-x-auto scrollbar-none bg-warm-50">
             {STAGES.map(stage => {
               const cards = filtered.filter(o => o.stage === stage.key)
