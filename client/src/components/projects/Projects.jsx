@@ -665,11 +665,13 @@ const IDEA_PRI_CARD = {
 }
 
 // ── Droppable column area ─────────────────────────────────────────────────────
-function DroppableColumn({ id, children }) {
+function DroppableColumn({ id, isOver, children }) {
   const { setNodeRef } = useDroppable({ id })
   return (
-    <div ref={setNodeRef} className="flex-1 overflow-y-auto p-2 scrollbar-none min-h-[200px]">
-      {children}
+    <div ref={setNodeRef} className={`flex flex-col flex-1 min-h-0 transition-colors duration-100 ${isOver ? 'bg-blue-50/60' : ''}`}>
+      <div className="flex-1 overflow-y-auto p-2 scrollbar-none min-h-[200px]">
+        {children}
+      </div>
     </div>
   )
 }
@@ -962,7 +964,7 @@ export default function Projects({ onProponiPipeline }) {
               p.stage === col.key || (col.key === 'sviluppo' && p.stage === 'test')
             )
             return (
-              <div key={col.key} className={`flex-1 min-w-[240px] flex flex-col border-r border-warm-200 last:border-r-0 transition-colors duration-100 ${overColId === col.key && activeId ? 'bg-blue-50/50' : ''}`}>
+              <div key={col.key} className="flex-1 min-w-[240px] flex flex-col border-r border-warm-200 last:border-r-0">
                 <div className={`px-3 py-3 ${col.headerBg} border-b ${col.border} flex items-center gap-2 flex-shrink-0`}>
                   <div className={`w-2 h-2 rounded-full ${col.dot}`}/>
                   <span className={`text-xs font-700 uppercase tracking-widest ${col.color}`}>{col.label}</span>
@@ -974,7 +976,7 @@ export default function Projects({ onProponiPipeline }) {
                   </div>
                 )}
                 {!loading && (
-                  <DroppableColumn id={col.key}>
+                  <DroppableColumn id={col.key} isOver={overColId === col.key && !!activeId}>
                     <div className="space-y-1.5">
                       {cards.map(p => (
                         <ProjectCard key={p.id} project={p} col={col} compact={compact}

@@ -296,11 +296,13 @@ const STAGE_NEXT = { proposto: 'campione', campione: 'offerta', offerta: 'ordine
 const STAGE_NEXT_LABEL = { proposto: 'Campione →', campione: 'Offerta →', offerta: 'Ordine →' }
 
 // ── Droppable column ──────────────────────────────────────────────────────────
-function DroppableColumn({ id, children }) {
+function DroppableColumn({ id, isOver, children }) {
   const { setNodeRef } = useDroppable({ id })
   return (
-    <div ref={setNodeRef} className="flex-1 overflow-y-auto p-2 scrollbar-none min-h-[200px]">
-      {children}
+    <div ref={setNodeRef} className={`flex flex-col flex-1 min-h-0 transition-colors duration-100 ${isOver ? 'bg-blue-50/60' : ''}`}>
+      <div className="flex-1 overflow-y-auto p-2 scrollbar-none min-h-[200px]">
+        {children}
+      </div>
     </div>
   )
 }
@@ -599,6 +601,8 @@ export default function ProductPipeline({ preProject, onModalClose }) {
   const [projects, setProjects] = useState([])
   const [tab, setTab] = useState('kanban') // 'kanban' | 'storico' | 'stats'
   const [compact, setCompact] = useState(false)
+  const [activeId, setActiveId] = useState(null)
+  const [overColId, setOverColId] = useState(null)
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -653,7 +657,11 @@ export default function ProductPipeline({ preProject, onModalClose }) {
     setModal(isAgent ? { type: 'agent', opp } : opp)
   }
 
+  function handleDragStart({ active }) { setActiveId(active.id) }
+  function handleDragOver({ over }) { setOverColId(over?.id ?? null) }
+
   async function handleDragEnd({ active, over }) {
+    setActiveId(null); setOverColId(null)
     if (!over) return
     const newStage = over.id   // sempre un column key
     const opp = pipeline.find(o => o.id === active.id)
@@ -739,7 +747,7 @@ export default function ProductPipeline({ preProject, onModalClose }) {
 
       {/* Kanban */}
       {tab === 'kanban' && (
-        <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+        <DndContext sensors={sensors} onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd}>
           <div className="flex flex-1 overflow-x-auto scrollbar-none bg-warm-50">
             {STAGES.map(stage => {
               const cards = filtered.filter(o => o.stage === stage.key)
@@ -756,7 +764,7 @@ export default function ProductPipeline({ preProject, onModalClose }) {
                     </div>
                   )}
                   {!loading && (
-                    <DroppableColumn id={stage.key}>
+                    <DroppableColumn id={stage.key} isOver={overColId === stage.key && !!activeId}>
                       <div className="space-y-1.5">
                         {cards.map(o => (
                           <OppCard key={o.id} opp={o} stage={stage} compact={compact}
