@@ -158,9 +158,17 @@ function ListView({ contacts, loading, onSelect, onNew, onImport, importing, imp
                       </td>
                       <td className="px-4 py-3 text-warm-600">{c.company || '—'}</td>
                       <td className="px-4 py-3">
-                        {stage && <span className={`inline-flex items-center gap-1.5 text-xs font-600 px-2 py-0.5 rounded-full ${stage.badge}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${stage.dot}`}/>{stage.label}
-                        </span>}
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {stage && <span className={`inline-flex items-center gap-1.5 text-xs font-600 px-2 py-0.5 rounded-full ${stage.badge}`}>
+                            <span className={`w-1.5 h-1.5 rounded-full ${stage.dot}`}/>{stage.label}
+                          </span>}
+                          {c.contact_type && (
+                            <span className={`text-xs font-600 px-2 py-0.5 rounded-full capitalize
+                              ${c.contact_type === 'cliente' ? 'bg-brand-50 text-brand-600' : 'bg-teal-50 text-teal-600'}`}>
+                              {c.contact_type}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-3 text-warm-500 text-xs">{c.owner?.full_name || '—'}</td>
                       <td className="px-4 py-3">
@@ -270,6 +278,12 @@ function ProfileView({ contact, onBack, onEdit, onDeleted }) {
               <span className={`inline-flex items-center gap-1.5 text-xs font-700 px-2.5 py-1 rounded-full ${stage.badge}`}>
                 <span className={`w-1.5 h-1.5 rounded-full ${stage.dot}`}/>{stage.label}
               </span>
+              {contact.contact_type && (
+                <span className={`text-xs font-700 px-2.5 py-1 rounded-full capitalize
+                  ${contact.contact_type === 'cliente' ? 'bg-brand-50 text-brand-700 border border-brand-200' : 'bg-teal-50 text-teal-700 border border-teal-200'}`}>
+                  {contact.contact_type}
+                </span>
+              )}
               {contact.owner && (
                 <span className="text-xs text-warm-500 bg-white/80 border border-warm-100 px-2 py-0.5 rounded-full">{contact.owner.full_name}</span>
               )}
@@ -454,13 +468,14 @@ function EditView({ contact, onBack, onSaved, onDeleted }) {
   const confirm = useConfirm()
   const isNew = !contact
   const [form, setForm] = useState({
-    name:     contact?.name     || '',
-    company:  contact?.company  || '',
-    email:    contact?.email    || '',
-    phone:    contact?.phone    || '',
-    stage:    contact?.stage    || 'new',
-    notes:    contact?.notes    || '',
-    owner_id: contact?.owner?.id || '',
+    name:         contact?.name         || '',
+    company:      contact?.company      || '',
+    email:        contact?.email        || '',
+    phone:        contact?.phone        || '',
+    stage:        contact?.stage        || 'new',
+    notes:        contact?.notes        || '',
+    owner_id:     contact?.owner?.id    || '',
+    contact_type: contact?.contact_type || '',
   })
   const [saving, setSaving]   = useState(false)
   const [deleting, setDeleting] = useState(false)
@@ -535,6 +550,21 @@ function EditView({ contact, onBack, onSaved, onDeleted }) {
               className="w-full text-sm border border-warm-200 rounded-xl px-3.5 py-2.5 focus:outline-none focus:border-brand-400 bg-warm-50">
               {STAGES.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
             </select>
+          </div>
+          <div>
+            <label className="text-xs font-700 text-warm-500 mb-1.5 block uppercase tracking-wide">Tipo</label>
+            <div className="flex gap-2">
+              {[['cliente','Cliente'],['fornitore','Fornitore']].map(([val, lbl]) => (
+                <button key={val} type="button"
+                  onClick={() => set('contact_type', form.contact_type === val ? '' : val)}
+                  className={`flex-1 py-2 rounded-xl text-xs font-600 border-2 transition-all
+                    ${form.contact_type === val
+                      ? val === 'cliente' ? 'bg-brand-50 text-brand-700 border-brand-400' : 'bg-teal-50 text-teal-700 border-teal-400'
+                      : 'border-warm-200 text-warm-400 hover:border-warm-300'}`}>
+                  {lbl}
+                </button>
+              ))}
+            </div>
           </div>
           {team.length > 0 && profile?.role !== 'agent' && (
             <div>

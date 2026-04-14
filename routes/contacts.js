@@ -131,7 +131,7 @@ router.post('/import-from-projects', requireAuth, requireRole('admin'), async (r
 });
 
 router.post('/', requireAuth, async (req, res) => {
-  const { name, company, email, phone, stage, owner_id, notes, source } = req.body;
+  const { name, company, email, phone, stage, owner_id, notes, source, contact_type } = req.body;
   if (!name) return res.status(400).json({ error: 'Nome obbligatorio' });
 
   const assignedOwner = req.profile.role === 'agent'
@@ -144,7 +144,8 @@ router.post('/', requireAuth, async (req, res) => {
       stage: stage || 'new',
       owner_id: assignedOwner,
       created_by: req.profile.id,
-      notes
+      notes,
+      contact_type: contact_type || null,
     }).select().single();
     if (error) throw error;
 
@@ -162,7 +163,7 @@ router.post('/', requireAuth, async (req, res) => {
 });
 
 router.patch('/:id', requireAuth, async (req, res) => {
-  const allowed = ['name', 'company', 'email', 'phone', 'stage', 'notes', 'owner_id'];
+  const allowed = ['name', 'company', 'email', 'phone', 'stage', 'notes', 'owner_id', 'contact_type'];
   const updates = Object.fromEntries(
     Object.entries(req.body).filter(([k]) => allowed.includes(k))
   );

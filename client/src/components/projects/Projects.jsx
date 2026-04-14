@@ -794,13 +794,6 @@ function ProjectCard({ project, col, onClick, onAdvance, onProponi, compact }) {
       {project.supplier && <div className={`text-xs ${pri ? pri.sub : 'text-warm-500'}`}><span className="opacity-60">Forn. </span>{project.supplier}</div>}
       {project.client && <div className={`text-xs ${pri ? pri.sub : 'text-warm-500'}`}><span className="opacity-60">Buy. </span>{project.client}</div>}
 
-      {/* Snippet note */}
-      {project.notes && (
-        <div className={`text-xs mt-1.5 line-clamp-2 leading-relaxed ${pri ? pri.sub : 'text-warm-400'}`}>
-          {project.notes}
-        </div>
-      )}
-
       {col.key === 'sviluppo' && steps.length > 0 && <StepProgress steps={steps}/>}
 
       {/* Bottone avanzamento + scheda sviluppo */}
