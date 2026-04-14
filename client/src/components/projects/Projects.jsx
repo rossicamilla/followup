@@ -3,8 +3,14 @@ import { api } from '../../lib/api'
 import { useApp } from '../../App'
 import {
   DndContext, PointerSensor, TouchSensor, useSensor, useSensors,
-  useDroppable, useDraggable, pointerWithin,
+  useDroppable, useDraggable, DragOverlay,
+  pointerWithin, rectIntersection,
 } from '@dnd-kit/core'
+
+function hybridCollision(args) {
+  const pointer = pointerWithin(args)
+  return pointer.length > 0 ? pointer : rectIntersection(args)
+}
 
 // ── Costanti ──────────────────────────────────────────────────────────────────
 
@@ -675,12 +681,15 @@ function DroppableColumn({ id, children }) {
 }
 
 // ── Card Kanban ───────────────────────────────────────────────────────────────
-function ProjectCard({ project, col, onClick, onAdvance, onProponi, compact }) {
+function ProjectCard({ project, col, onClick, onAdvance, onProponi, compact, isDragging: isActiveDrag }) {
   const [advancing, setAdvancing] = useState(false)
 
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({ id: project.id })
-  const dragStyle = transform
-    ? { transform: `translate3d(${transform.x}px,${transform.y}px,0)`, zIndex: 50, opacity: 0.45 }
+  const { attributes, listeners, setNodeRef, transform } = useDraggable({ id: project.id })
+  // Quando la card è in drag, la rendiamo trasparente — il DragOverlay fa da "copia" visibile
+  const dragStyle = isActiveDrag
+    ? { opacity: 0.25 }
+    : transform
+    ? { transform: `translate3d(${transform.x}px,${transform.y}px,0)`, zIndex: 50 }
     : undefined
 
   async function handleAdvance(e) {
@@ -774,6 +783,8 @@ export default function Projects({ onProponiPipeline }) {
   const [syncing, setSyncing]         = useState(false)
   const [deduping, setDeduping]       = useState(false)
   const [syncResult, setSyncResult]   = useState(null)
+  const [draggingId, setDraggingId]   = useState(null)
+  const [overCol, setOverCol]         = useState(null)
   const fileInputRef = useRef(null)
 
   const sensors = useSensors(
@@ -803,8 +814,9 @@ export default function Projects({ onProponiPipeline }) {
   }
 
   async function handleDragEnd({ active, over }) {
+    setDraggingId(null); setOverCol(null)
     if (!over) return
-    const newStage = over.id   // sempre un column key
+    const newStage = over.id
     const project = projects.find(p => p.id === active.id)
     if (!project || project.stage === newStage) return
     const prevStage = project.stage
@@ -814,6 +826,14 @@ export default function Projects({ onProponiPipeline }) {
     } catch {
       setProjects(prev => prev.map(p => p.id === active.id ? { ...p, stage: prevStage } : p))
     }
+  }
+
+  function handleDragStart({ active }) {
+    setDraggingId(active.id)
+  }
+
+  function handleDragOver({ over }) {
+    setOverCol(over?.id ?? null)
   }
 
   async function handleDedup() {
@@ -924,7 +944,8 @@ export default function Projects({ onProponiPipeline }) {
       )}
 
       {/* Kanban */}
-      <DndContext sensors={sensors} collisionDetection={pointerWithin} onDragEnd={handleDragEnd}>
+      <DndContext sensors={sensors} collisionDetection={hybridCollision}
+        onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd}>
         <div className="flex flex-1 overflow-x-auto scrollbar-none bg-warm-50">
           {COLUMNS.map(col => {
             let cards = filtered.filter(p =>
@@ -935,8 +956,9 @@ export default function Projects({ onProponiPipeline }) {
                 (PRI_ORDER[a.priority] ?? 99) - (PRI_ORDER[b.priority] ?? 99)
               )
             }
+            const isOver = overCol === col.key && draggingId !== null
             return (
-              <div key={col.key} className="flex-1 min-w-[240px] flex flex-col border-r border-warm-200 last:border-r-0">
+              <div key={col.key} className={`flex-1 min-w-[240px] flex flex-col border-r border-warm-200 last:border-r-0 transition-colors duration-150 ${isOver ? 'bg-blue-50/60' : ''}`}>
                 <div className={`px-3 py-3 ${col.headerBg} border-b ${col.border} flex items-center gap-2 flex-shrink-0`}>
                   <div className={`w-2 h-2 rounded-full ${col.dot}`}/>
                   <span className={`text-xs font-700 uppercase tracking-widest ${col.color}`}>{col.label}</span>
@@ -952,6 +974,7 @@ export default function Projects({ onProponiPipeline }) {
                     <div className="space-y-1.5">
                       {cards.map(p => (
                         <ProjectCard key={p.id} project={p} col={col} compact={compact}
+                          isDragging={draggingId === p.id}
                           onClick={() => {
                             if (col.key === 'sviluppo') setSviluppoView(p)
                             else if (col.key === 'idea') setModal({ type: 'idea', project: p })
@@ -962,8 +985,8 @@ export default function Projects({ onProponiPipeline }) {
                         />
                       ))}
                       {cards.length === 0 && (
-                        <div className={`text-xs ${col.emptyColor} opacity-40 text-center py-10 border-2 border-dashed ${col.border} rounded-xl`}>
-                          Nessun progetto
+                        <div className={`text-xs ${col.emptyColor} text-center py-10 border-2 border-dashed rounded-xl transition-all ${isOver ? `opacity-80 ${col.border} scale-[1.02]` : `opacity-40 ${col.border}`}`}>
+                          Rilascia qui
                         </div>
                       )}
                     </div>
@@ -973,6 +996,18 @@ export default function Projects({ onProponiPipeline }) {
             )
           })}
         </div>
+        <DragOverlay dropAnimation={null}>
+          {draggingId ? (() => {
+            const p = projects.find(x => x.id === draggingId)
+            if (!p) return null
+            return (
+              <div className="bg-white rounded-xl border-2 border-blue-400 shadow-xl p-3 opacity-95 max-w-[240px]">
+                <div className="font-600 text-sm text-warm-900 leading-snug">{p.name}</div>
+                {p.market && <div className="mt-1 text-xs text-warm-400">{p.market}</div>}
+              </div>
+            )
+          })() : null}
+        </DragOverlay>
       </DndContext>
 
       {/* Modals */}
