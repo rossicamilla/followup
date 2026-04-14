@@ -342,4 +342,96 @@ router.post('/import-contacts', requireAuth, async (req, res) => {
   }
 })
 
+// POST /api/outlook/import-contacts-from-emails — estrae mittenti unici dalla inbox,
+// Claude classifica chi è contatto di lavoro vs pubblicità, importa solo i business
+router.post('/import-contacts-from-emails', requireAuth, async (req, res) => {
+  try {
+    const token = await getValidToken(req.profile.id)
+
+    // Leggi le ultime 100 email dalla inbox
+    const response = await axios.get(
+      'https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages?$top=100&$select=from,receivedDateTime&$orderby=receivedDateTime desc',
+      { headers: { Authorization: `Bearer ${token}` } }
+    )
+
+    const emails = response.data.value || []
+    if (!emails.length) return res.json({ imported: 0, skipped: 0, spam: 0 })
+
+    // Estrai mittenti unici (per email)
+    const seenEmails = new Map()
+    for (const e of emails) {
+      const addr = e.from?.emailAddress?.address?.toLowerCase().trim()
+      const name = e.from?.emailAddress?.name?.trim()
+      if (addr && name && !seenEmails.has(addr)) {
+        seenEmails.set(addr, name)
+      }
+    }
+
+    if (!seenEmails.size) return res.json({ imported: 0, skipped: 0, spam: 0 })
+
+    // Leggi contatti già presenti nel CRM per evitare duplicati
+    const { data: existing } = await supabase.from('contacts').select('email')
+    const existingEmails = new Set((existing || []).map(c => c.email?.toLowerCase()).filter(Boolean))
+
+    // Filtra già presenti
+    const candidates = [...seenEmails.entries()]
+      .filter(([email]) => !existingEmails.has(email))
+      .map(([email, name]) => ({ email, name }))
+
+    if (!candidates.length) return res.json({ imported: 0, skipped: seenEmails.size, spam: 0 })
+
+    // Claude classifica i mittenti in batch
+    const list = candidates.map((c, i) => `${i + 1}. ${c.name} <${c.email}>`).join('\n')
+    const message = await claude.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 1000,
+      messages: [{
+        role: 'user',
+        content: `Sei un assistente CRM per un'azienda italiana B2B di distribuzione alimentare.
+Classifica questi mittenti email come "business" (contatto di lavoro: fornitori, clienti, partner, colleghi) o "spam" (newsletter, pubblicità, notifiche automatiche, noreply, marketing).
+
+${list}
+
+Rispondi SOLO con un array JSON, un elemento per ogni mittente nello stesso ordine:
+[{"i":1,"type":"business","company":"azienda se deducibile o null"},...]`
+      }]
+    })
+
+    let classifications = []
+    try {
+      const raw = message.content?.[0]?.text || ''
+      classifications = JSON.parse(raw.replace(/```json|```/g, '').trim())
+    } catch { classifications = [] }
+
+    let imported = 0, spam = 0, skipped = 0
+
+    for (let idx = 0; idx < candidates.length; idx++) {
+      const c = candidates[idx]
+      const cl = classifications.find(x => x.i === idx + 1)
+
+      if (!cl || cl.type !== 'business') { spam++; continue }
+
+      const { error } = await supabase.from('contacts').insert({
+        name: c.name,
+        email: c.email,
+        company: cl.company || null,
+        source: 'outlook_email',
+        stage: 'new',
+        owner_id: req.profile.id,
+        created_by: req.profile.id,
+      })
+
+      if (error) { skipped++; continue }
+      imported++
+    }
+
+    res.json({ imported, skipped, spam, total: candidates.length })
+  } catch (e) {
+    if (e.message?.includes('Token Outlook non trovato')) {
+      return res.status(400).json({ error: 'Outlook non connesso', not_connected: true })
+    }
+    res.status(500).json({ error: e.message })
+  }
+})
+
 module.exports = router;

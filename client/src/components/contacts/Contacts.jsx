@@ -13,7 +13,7 @@ const stageMap = Object.fromEntries(STAGES.map(s => [s.key, s]))
 const AVATARS = ['bg-brand-100 text-brand-700','bg-blue-100 text-blue-700','bg-orange-100 text-orange-700','bg-purple-100 text-purple-700','bg-amber-100 text-amber-700']
 
 // ── Vista: Lista contatti ─────────────────────────────────────────────
-function ListView({ contacts, loading, onSelect, onNew, onImport, importing, importResult, onImportOutlook, importingOutlook, onDeleteOutlook, deletingOutlook }) {
+function ListView({ contacts, loading, onSelect, onNew, onImport, importing, importResult, onImportOutlook, importingOutlook, onImportFromEmails, importingFromEmails, onDeleteOutlook, deletingOutlook }) {
   const { profile } = useApp()
   const [search, setSearch] = useState('')
   const [filterStage, setFilterStage] = useState('')
@@ -40,13 +40,13 @@ function ListView({ contacts, loading, onSelect, onNew, onImport, importing, imp
           <div className="flex items-center gap-2">
             {profile?.role === 'admin' && (
               <>
-                <button onClick={onImportOutlook} disabled={importingOutlook}
-                  title="Importa contatti dalla rubrica Outlook"
+                <button onClick={onImportFromEmails} disabled={importingFromEmails}
+                  title="Importa contatti di lavoro dalle ultime 100 email ricevute"
                   className="text-xs font-600 rounded-lg px-3 py-2 border border-warm-200 hover:border-blue-300 text-warm-500 hover:text-blue-600 transition-colors flex items-center gap-1.5 disabled:opacity-40">
-                  {importingOutlook
+                  {importingFromEmails
                     ? <span className="w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"/>
-                    : <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5"><rect x="2" y="2" width="12" height="12" rx="2"/><path d="M5 8h6M8 5v6"/></svg>}
-                  Outlook
+                    : <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5"><path d="M2 4h12v9a1 1 0 01-1 1H3a1 1 0 01-1-1V4z"/><path d="M2 4l6 5 6-5"/></svg>}
+                  Da email
                 </button>
                 {contacts.some(c => c.source === 'outlook') && (
                   <button onClick={onDeleteOutlook} disabled={deletingOutlook}
@@ -96,6 +96,10 @@ function ListView({ contacts, loading, onSelect, onNew, onImport, importing, imp
           <span>{importResult.ok
             ? importResult.source === 'delete'
               ? `✓ ${importResult.deleted} contatti Outlook eliminati`
+              : importResult.source === 'email'
+              ? (importResult.imported > 0
+                  ? `✓ ${importResult.imported} contatti di lavoro importati dalle email${importResult.spam > 0 ? ` · ${importResult.spam} pubblicità/spam ignorati` : ''}${importResult.skipped > 0 ? ` · ${importResult.skipped} già presenti` : ''}`
+                  : `✓ Nessun nuovo contatto — ${importResult.spam > 0 ? `${importResult.spam} spam ignorati, ` : ''}tutti già presenti`)
               : (importResult.imported > 0
                   ? `✓ ${importResult.imported} contatti importati${importResult.source === 'outlook' ? ' da Outlook' : ' da Progetti/Vendite'}${importResult.skipped > 0 ? ` · ${importResult.skipped} già presenti` : ''}`
                   : '✓ Nessun nuovo contatto da importare — tutti già presenti')
@@ -577,9 +581,10 @@ export default function Contacts() {
   // view: 'list' | 'profile' | 'edit' | 'new'
   const [view, setView]         = useState('list')
   const [current, setCurrent]   = useState(null)  // contatto selezionato
-  const [importing, setImporting]               = useState(false)
-  const [importingOutlook, setImportingOutlook] = useState(false)
-  const [deletingOutlook, setDeletingOutlook]   = useState(false)
+  const [importing, setImporting]                       = useState(false)
+  const [importingOutlook, setImportingOutlook]         = useState(false)
+  const [importingFromEmails, setImportingFromEmails]   = useState(false)
+  const [deletingOutlook, setDeletingOutlook]           = useState(false)
   const [importResult, setImportResult]         = useState(null)
 
   const load = () => {
@@ -615,6 +620,19 @@ export default function Contacts() {
       setImportResult({ ok: false, error: e.message })
     }
     setImportingOutlook(false)
+  }
+
+  async function handleImportFromEmails() {
+    setImportingFromEmails(true)
+    setImportResult(null)
+    try {
+      const d = await api('/api/outlook/import-contacts-from-emails', { method: 'POST', body: {} })
+      setImportResult({ ok: true, imported: d.imported, skipped: d.skipped, spam: d.spam, source: 'email' })
+      if (d.imported > 0) load()
+    } catch (e) {
+      setImportResult({ ok: false, error: e.message })
+    }
+    setImportingFromEmails(false)
   }
 
   async function handleDeleteOutlookContacts() {
@@ -665,6 +683,8 @@ export default function Contacts() {
       importResult={importResult}
       onImportOutlook={handleImportOutlook}
       importingOutlook={importingOutlook}
+      onImportFromEmails={handleImportFromEmails}
+      importingFromEmails={importingFromEmails}
       onDeleteOutlook={handleDeleteOutlookContacts}
       deletingOutlook={deletingOutlook}
     />
