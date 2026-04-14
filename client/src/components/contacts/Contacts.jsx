@@ -13,7 +13,7 @@ const stageMap = Object.fromEntries(STAGES.map(s => [s.key, s]))
 const AVATARS = ['bg-brand-100 text-brand-700','bg-blue-100 text-blue-700','bg-orange-100 text-orange-700','bg-purple-100 text-purple-700','bg-amber-100 text-amber-700']
 
 // ── Vista: Lista contatti ─────────────────────────────────────────────
-function ListView({ contacts, loading, onSelect, onNew, onImport, importing, importResult }) {
+function ListView({ contacts, loading, onSelect, onNew, onImport, importing, importResult, onImportOutlook, importingOutlook }) {
   const { profile } = useApp()
   const [search, setSearch] = useState('')
   const [filterStage, setFilterStage] = useState('')
@@ -39,14 +39,24 @@ function ListView({ contacts, loading, onSelect, onNew, onImport, importing, imp
           </div>
           <div className="flex items-center gap-2">
             {profile?.role === 'admin' && (
-              <button onClick={onImport} disabled={importing}
-                title="Importa clienti da Progetti e Vendite"
-                className="text-xs font-600 rounded-lg px-3 py-2 border border-warm-200 hover:border-brand-300 text-warm-500 hover:text-brand-600 transition-colors flex items-center gap-1.5 disabled:opacity-40">
-                {importing
-                  ? <span className="w-3 h-3 border-2 border-brand-400 border-t-transparent rounded-full animate-spin"/>
-                  : <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5"><path d="M8 2v8M5 7l3 3 3-3M3 13h10"/></svg>}
-                Importa
-              </button>
+              <>
+                <button onClick={onImportOutlook} disabled={importingOutlook}
+                  title="Importa contatti dalla rubrica Outlook"
+                  className="text-xs font-600 rounded-lg px-3 py-2 border border-warm-200 hover:border-blue-300 text-warm-500 hover:text-blue-600 transition-colors flex items-center gap-1.5 disabled:opacity-40">
+                  {importingOutlook
+                    ? <span className="w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"/>
+                    : <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5"><rect x="2" y="2" width="12" height="12" rx="2"/><path d="M5 8h6M8 5v6"/></svg>}
+                  Outlook
+                </button>
+                <button onClick={onImport} disabled={importing}
+                  title="Importa clienti da Progetti e Vendite"
+                  className="text-xs font-600 rounded-lg px-3 py-2 border border-warm-200 hover:border-brand-300 text-warm-500 hover:text-brand-600 transition-colors flex items-center gap-1.5 disabled:opacity-40">
+                  {importing
+                    ? <span className="w-3 h-3 border-2 border-brand-400 border-t-transparent rounded-full animate-spin"/>
+                    : <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-3.5 h-3.5"><path d="M8 2v8M5 7l3 3 3-3M3 13h10"/></svg>}
+                  Importa
+                </button>
+              </>
             )}
             <button onClick={onNew}
               className="bg-brand-500 hover:bg-brand-600 text-white text-sm font-600 rounded-lg px-4 py-2 transition-colors flex items-center gap-1.5">
@@ -74,7 +84,9 @@ function ListView({ contacts, loading, onSelect, onNew, onImport, importing, imp
       {importResult && (
         <div className={`mx-0 px-4 py-2.5 text-xs font-500 flex items-center justify-between gap-2 border-b ${importResult.ok ? 'bg-emerald-50 text-emerald-800 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'}`}>
           <span>{importResult.ok
-            ? (importResult.imported > 0 ? `✓ ${importResult.imported} contatti importati da Progetti/Vendite` : '✓ Nessun nuovo contatto da importare — tutti già presenti')
+            ? (importResult.imported > 0
+                ? `✓ ${importResult.imported} contatti importati${importResult.source === 'outlook' ? ' da Outlook' : ' da Progetti/Vendite'}${importResult.skipped > 0 ? ` · ${importResult.skipped} già presenti` : ''}`
+                : '✓ Nessun nuovo contatto da importare — tutti già presenti')
             : `✗ ${importResult.error}`}
           </span>
         </div>
@@ -553,8 +565,9 @@ export default function Contacts() {
   // view: 'list' | 'profile' | 'edit' | 'new'
   const [view, setView]         = useState('list')
   const [current, setCurrent]   = useState(null)  // contatto selezionato
-  const [importing, setImporting] = useState(false)
-  const [importResult, setImportResult] = useState(null)
+  const [importing, setImporting]               = useState(false)
+  const [importingOutlook, setImportingOutlook] = useState(false)
+  const [importResult, setImportResult]         = useState(null)
 
   const load = () => {
     api('/api/contacts')
@@ -576,6 +589,19 @@ export default function Contacts() {
       setImportResult({ ok: false, error: e.message })
     }
     setImporting(false)
+  }
+
+  async function handleImportOutlook() {
+    setImportingOutlook(true)
+    setImportResult(null)
+    try {
+      const d = await api('/api/outlook/import-contacts', { method: 'POST', body: {} })
+      setImportResult({ ok: true, imported: d.imported, skipped: d.skipped, source: 'outlook' })
+      if (d.imported > 0) load()
+    } catch (e) {
+      setImportResult({ ok: false, error: e.message })
+    }
+    setImportingOutlook(false)
   }
 
   function openProfile(contact) { setCurrent(contact); setView('profile') }
@@ -611,6 +637,8 @@ export default function Contacts() {
       onImport={handleImport}
       importing={importing}
       importResult={importResult}
+      onImportOutlook={handleImportOutlook}
+      importingOutlook={importingOutlook}
     />
   )
 

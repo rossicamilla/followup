@@ -35,7 +35,7 @@ async function getValidToken(userId) {
         client_secret: MICROSOFT_CLIENT_SECRET,
         refresh_token: decryptedRefresh,
         grant_type: 'refresh_token',
-        scope: 'https://graph.microsoft.com/Calendars.ReadWrite https://graph.microsoft.com/Mail.Read offline_access'
+        scope: 'https://graph.microsoft.com/Calendars.ReadWrite https://graph.microsoft.com/Mail.Read https://graph.microsoft.com/Contacts.Read offline_access'
       })
     );
 

@@ -42,7 +42,7 @@ const MICROSOFT_TENANT = process.env.MICROSOFT_TENANT || 'common';
 
 // Genera il link per autorizzazione (prima volta)
 router.get('/authorize', requireAuth, (req, res) => {
-  const scope = encodeURIComponent('https://graph.microsoft.com/Calendars.ReadWrite https://graph.microsoft.com/Mail.Read offline_access');
+  const scope = encodeURIComponent('https://graph.microsoft.com/Calendars.ReadWrite https://graph.microsoft.com/Mail.Read https://graph.microsoft.com/Contacts.Read offline_access');
   const state = generateOAuthState(req.profile.id);
   const authUrl = `https://login.microsoftonline.com/${MICROSOFT_TENANT}/oauth2/v2.0/authorize?client_id=${MICROSOFT_CLIENT_ID}&response_type=code&scope=${scope}&redirect_uri=${encodeURIComponent(MICROSOFT_REDIRECT_URI)}&state=${state}&prompt=consent`;
   res.json({ success: true, authUrl });
@@ -277,5 +277,69 @@ TESTO: ${body}
     res.status(500).json({ error: e.message });
   }
 });
+
+// POST /api/outlook/import-contacts — importa contatti dalla rubrica Outlook
+router.post('/import-contacts', requireAuth, async (req, res) => {
+  try {
+    const token = await getValidToken(req.profile.id)
+
+    // Leggi tutti i contatti dalla rubrica (paginazione fino a 500)
+    let contacts = []
+    let url = 'https://graph.microsoft.com/v1.0/me/contacts?$select=displayName,emailAddresses,mobilePhone,businessPhones,companyName&$top=100'
+
+    while (url) {
+      const response = await axios.get(url, { headers: { Authorization: `Bearer ${token}` } })
+      contacts = contacts.concat(response.data.value || [])
+      url = response.data['@odata.nextLink'] || null
+      if (contacts.length >= 500) break
+    }
+
+    if (!contacts.length) return res.json({ imported: 0, skipped: 0 })
+
+    // Leggi email già presenti nel CRM per evitare duplicati
+    const { data: existing } = await supabase
+      .from('contacts')
+      .select('email')
+
+    const existingEmails = new Set((existing || []).map(c => c.email?.toLowerCase()).filter(Boolean))
+
+    let imported = 0
+    let skipped = 0
+
+    for (const c of contacts) {
+      const name = c.displayName?.trim()
+      if (!name) { skipped++; continue }
+
+      const email = c.emailAddresses?.[0]?.address?.toLowerCase().trim() || null
+      const phone = c.mobilePhone || c.businessPhones?.[0] || null
+      const company = c.companyName?.trim() || null
+
+      // Skip se email già presente
+      if (email && existingEmails.has(email)) { skipped++; continue }
+
+      const { error } = await supabase.from('contacts').insert({
+        name,
+        email,
+        phone,
+        company,
+        source: 'outlook',
+        stage: 'new',
+        owner_id: req.profile.id,
+        created_by: req.profile.id,
+      })
+
+      if (error) { skipped++; continue }
+      if (email) existingEmails.add(email)
+      imported++
+    }
+
+    res.json({ imported, skipped, total: contacts.length })
+  } catch (e) {
+    if (e.message?.includes('Token Outlook non trovato')) {
+      return res.status(400).json({ error: 'Outlook non connesso', not_connected: true })
+    }
+    res.status(500).json({ error: e.message })
+  }
+})
 
 module.exports = router;
