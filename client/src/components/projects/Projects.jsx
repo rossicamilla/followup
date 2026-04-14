@@ -837,8 +837,8 @@ function SviluppoView({ project: initialProject, onBack, onSaved, onDeleted, onA
           {project.market && <MarketBadge market={project.market}/>}
         </div>
         <div className="flex-shrink-0 flex items-center gap-1.5 ml-1">
-          {/* Toggle timeline / gantt */}
-          <div className="flex rounded-lg border border-warm-200 overflow-hidden">
+          {/* Toggle timeline / gantt — solo desktop */}
+          <div className="hidden md:flex rounded-lg border border-warm-200 overflow-hidden">
             <button onClick={() => setGanttMode(false)}
               className={`px-2.5 py-1.5 text-xs font-600 transition-colors flex items-center gap-1
                 ${!ganttMode ? 'bg-blue-500 text-white' : 'bg-white text-warm-400 hover:text-warm-700'}`}>
@@ -899,9 +899,9 @@ function SviluppoView({ project: initialProject, onBack, onSaved, onDeleted, onA
         </div>
       </div>
 
-      {/* ── Gantt ── */}
+      {/* ── Gantt (solo desktop) ── */}
       {ganttMode && (
-        <div className="flex-1 overflow-auto scrollbar-none">
+        <div className="hidden md:block flex-1 overflow-auto scrollbar-none">
           <div className="p-4">
             <GanttView steps={steps} onEditDates={openEditDates}/>
           </div>
@@ -940,9 +940,8 @@ function SviluppoView({ project: initialProject, onBack, onSaved, onDeleted, onA
         </div>
       )}
 
-      {/* ── Timeline (lista) ── */}
-      {!ganttMode && (
-      <div className="flex-1 overflow-y-auto scrollbar-none">
+      {/* ── Timeline (lista) — sempre su mobile, su desktop solo se !ganttMode ── */}
+      <div className={`flex-1 overflow-y-auto scrollbar-none ${ganttMode ? 'hidden md:hidden' : ''}`}>
         <div className="max-w-xl mx-auto px-6 pt-5 pb-10">
 
           {/* Riepilogo email */}
@@ -1135,7 +1134,6 @@ function SviluppoView({ project: initialProject, onBack, onSaved, onDeleted, onA
 
         </div>
       </div>
-      )}
     </div>
   )
 }
@@ -1448,10 +1446,54 @@ export default function Projects({ onProponiPipeline }) {
         </div>
       )}
 
-      {/* Kanban */}
+      {/* Lista mobile (sostituisce kanban su telefono) */}
+      <div className="md:hidden flex-1 overflow-y-auto scrollbar-none bg-white">
+        {loading && <div className="p-4 space-y-2">{[1,2,3,4].map(i=><div key={i} className="h-16 bg-warm-100 rounded-xl animate-pulse"/>)}</div>}
+        {!loading && filtered.length === 0 && (
+          <div className="flex flex-col items-center justify-center h-full text-warm-300 gap-2 py-16">
+            <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" strokeWidth="1" className="w-10 h-10 opacity-40"><rect x="4" y="4" width="32" height="32" rx="4"/><path d="M12 20h16M20 12v16"/></svg>
+            <p className="text-sm">Nessun progetto</p>
+          </div>
+        )}
+        {!loading && COLUMNS.map(col => {
+          const cards = filtered.filter(p => p.stage === col.key || (col.key === 'sviluppo' && p.stage === 'test'))
+          if (cards.length === 0) return null
+          return (
+            <div key={col.key}>
+              <div className={`px-4 py-2 ${col.headerBg} border-b ${col.border} flex items-center gap-2 sticky top-0 z-10`}>
+                <div className={`w-2 h-2 rounded-full ${col.dot}`}/>
+                <span className={`text-xs font-700 uppercase tracking-widest ${col.color}`}>{col.label}</span>
+                <span className={`ml-auto text-xs font-700 ${col.color}`}>{cards.length}</span>
+              </div>
+              <div className="divide-y divide-warm-100">
+                {cards.map(p => (
+                  <div key={p.id} onClick={() => {
+                    if (col.key === 'sviluppo') setSviluppoView(p)
+                    else if (col.key === 'idea') setModal({ type: 'idea', project: p })
+                    else setModal({ type: 'pronto', project: p })
+                  }} className="flex items-center gap-3 px-4 py-3 hover:bg-warm-50 cursor-pointer transition-colors">
+                    <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${col.dot}`}/>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-600 text-warm-900 text-sm truncate">{p.name}</div>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        {p.market && <span className={`text-2xs font-600 px-1.5 py-0.5 rounded-full ${MARKET_COLORS[p.market] || 'bg-warm-100 text-warm-500'}`}>{p.market}</span>}
+                        {p.supplier && <span className="text-2xs text-warm-400 truncate">{p.supplier}</span>}
+                      </div>
+                    </div>
+                    {p.priority && <span className={`text-2xs font-600 px-2 py-0.5 rounded-full flex-shrink-0 ${PRI_COLORS[p.priority]}`}>{p.priority}</span>}
+                    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" className="w-4 h-4 text-warm-300 flex-shrink-0"><path d="M6 12l4-4-4-4"/></svg>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Kanban desktop */}
       <DndContext sensors={sensors}
         onDragStart={handleDragStart} onDragOver={handleDragOver} onDragEnd={handleDragEnd}>
-        <div className="flex flex-1 overflow-x-auto scrollbar-none bg-warm-50">
+        <div className="hidden md:flex flex-1 overflow-x-auto scrollbar-none bg-warm-50">
           {COLUMNS.map(col => {
             const cards = filtered.filter(p =>
               p.stage === col.key || (col.key === 'sviluppo' && p.stage === 'test')
