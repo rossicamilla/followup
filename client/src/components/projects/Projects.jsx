@@ -3,7 +3,7 @@ import { api } from '../../lib/api'
 import { useApp } from '../../App'
 import {
   DndContext, PointerSensor, TouchSensor, useSensor, useSensors,
-  useDroppable, closestCenter,
+  useDroppable, closestCenter, DragOverlay,
 } from '@dnd-kit/core'
 import { SortableContext, useSortable, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
@@ -684,8 +684,7 @@ function ProjectCard({ project, col, onClick, onAdvance, onProponi, compact }) {
   const dragStyle = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.35 : 1,
-    zIndex: isDragging ? 50 : undefined,
+    opacity: isDragging ? 0 : 1,  // invisibile: il DragOverlay fa da copia visibile
   }
 
   async function handleAdvance(e) {
@@ -1045,6 +1044,22 @@ export default function Projects({ onProponiPipeline }) {
             )
           })}
         </div>
+
+        <DragOverlay>
+          {(() => {
+            if (!activeId) return null
+            const p = projects.find(x => x.id === activeId)
+            if (!p) return null
+            const pri = IDEA_PRI_CARD[p.priority]
+            return (
+              <div className={`rounded-xl border border-l-4 p-3 shadow-xl cursor-grabbing
+                ${pri ? `${pri.bg} ${pri.border} ${pri.borderL}` : 'bg-white border-warm-200 border-l-slate-400'}`}>
+                <div className={`font-600 text-sm leading-snug ${pri ? pri.text : 'text-warm-900'}`}>{p.name}</div>
+                {p.market && <div className="mt-1"><MarketBadge market={p.market}/></div>}
+              </div>
+            )
+          })()}
+        </DragOverlay>
       </DndContext>
 
       {/* Modals */}
