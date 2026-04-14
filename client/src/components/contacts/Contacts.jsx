@@ -16,10 +16,13 @@ const AVATARS = ['bg-brand-100 text-brand-700','bg-blue-100 text-blue-700','bg-o
 function ListView({ contacts, loading, onSelect, onNew, onImport, importing, importResult, onImportOutlook, importingOutlook, onImportFromEmails, importingFromEmails, onDeleteOutlook, deletingOutlook }) {
   const { profile } = useApp()
   const [search, setSearch] = useState('')
-  const [filterStage, setFilterStage] = useState('')
+  const [filterType, setFilterType] = useState('')      // '' | 'cliente' | 'fornitore'
+  const [filterActivity, setFilterActivity] = useState('') // '' | 'progetti' | 'vendite'
 
   const filtered = contacts.filter(c => {
-    if (filterStage && c.stage !== filterStage) return false
+    if (filterType && c.contact_type !== filterType) return false
+    if (filterActivity === 'progetti' && !(c.open_projects > 0)) return false
+    if (filterActivity === 'vendite' && !(c.open_pipeline > 0)) return false
     if (search) {
       const q = search.toLowerCase()
       return c.name?.toLowerCase().includes(q) || c.company?.toLowerCase().includes(q) || c.email?.toLowerCase().includes(q)
@@ -83,11 +86,33 @@ function ListView({ contacts, loading, onSelect, onNew, onImport, importing, imp
             <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Cerca per nome, azienda, email..."
               className="w-full text-xs border border-warm-200 rounded-lg pl-8 pr-3 py-1.5 bg-white text-warm-700 focus:outline-none focus:border-brand-400"/>
           </div>
-          <select value={filterStage} onChange={e => setFilterStage(e.target.value)}
-            className="text-xs border border-warm-200 rounded-lg px-3 py-1.5 bg-white text-warm-700 font-medium focus:outline-none focus:border-brand-400">
-            <option value="">Tutti gli stage</option>
-            {STAGES.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
-          </select>
+        </div>
+        <div className="flex gap-1.5 flex-wrap mt-2">
+          {/* Tipo */}
+          {['', 'cliente', 'fornitore'].map(t => (
+            <button key={t} type="button" onClick={() => setFilterType(t)}
+              className={`text-xs font-600 px-3 py-1 rounded-full transition-all ${
+                filterType === t
+                  ? t === 'cliente' ? 'bg-brand-500 text-white' : t === 'fornitore' ? 'bg-teal-500 text-white' : 'bg-warm-900 text-white'
+                  : 'bg-warm-100 text-warm-500 hover:bg-warm-200'
+              }`}>
+              {t === '' ? 'Tutti' : t === 'cliente' ? 'Clienti' : 'Fornitori'}
+            </button>
+          ))}
+          <div className="w-px bg-warm-200 mx-0.5"/>
+          {/* Attività */}
+          {[
+            { key: 'progetti', label: '📦 Con progetti' },
+            { key: 'vendite',  label: '🎯 Con vendite'  },
+          ].map(({ key, label }) => (
+            <button key={key} type="button"
+              onClick={() => setFilterActivity(filterActivity === key ? '' : key)}
+              className={`text-xs font-600 px-3 py-1 rounded-full transition-all ${
+                filterActivity === key ? 'bg-warm-900 text-white' : 'bg-warm-100 text-warm-500 hover:bg-warm-200'
+              }`}>
+              {label}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -119,7 +144,7 @@ function ListView({ contacts, loading, onSelect, onNew, onImport, importing, imp
             <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" strokeWidth="1" className="w-10 h-10 opacity-40">
               <path d="M20 12a6 6 0 1 1 0 12 6 6 0 0 1 0-12zM6 34a14 14 0 0 1 28 0"/>
             </svg>
-            <p className="text-sm">{search || filterStage ? 'Nessun risultato' : 'Nessun contatto. Creane uno!'}</p>
+            <p className="text-sm">{search || filterType || filterActivity ? 'Nessun risultato' : 'Nessun contatto. Creane uno!'}</p>
           </div>
         )}
         {!loading && filtered.length > 0 && (
