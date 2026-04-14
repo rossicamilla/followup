@@ -123,6 +123,30 @@ export default function TaskEditModal({ task, onClose, onSaved }) {
                   className="w-full text-xl font-600 text-warm-900 border-0 focus:outline-none placeholder:text-warm-300 placeholder:font-400 bg-transparent resize-none leading-snug"
                 />
 
+                {/* Assegnato a */}
+                {canReassign && members.length > 0 && (
+                  <div className="mt-4">
+                    <div className="text-2xs font-700 text-warm-400 uppercase tracking-widest mb-1.5">Assegnato a</div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {members.map((m, i) => {
+                        const sel = form.assigned_to_id === m.id
+                        return (
+                          <button key={m.id} type="button"
+                            onClick={() => setForm(f=>({...f,assigned_to_id: sel ? '' : m.id}))}
+                            className={`flex items-center gap-1.5 pl-1 pr-2.5 py-1 rounded-full text-xs font-600 transition-all ${
+                              sel ? 'bg-warm-900 text-white' : 'bg-white text-warm-600 border border-warm-200 hover:border-warm-300'
+                            }`}>
+                            <div className={`w-5 h-5 rounded-full flex items-center justify-center text-2xs font-700 flex-shrink-0 ${sel ? 'bg-white/20 text-white' : AV_COLORS[i%AV_COLORS.length]}`}>
+                              {initials(m.full_name)}
+                            </div>
+                            {m.full_name.split(' ')[0]}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 {/* Tipo */}
                 <div className="mt-5">
                   <div className="text-2xs font-700 text-warm-400 uppercase tracking-widest mb-2">Tipo</div>
@@ -246,29 +270,6 @@ export default function TaskEditModal({ task, onClose, onSaved }) {
                   </button>
                 </div>
 
-                {/* Assegnato a */}
-                {canReassign && members.length > 0 && (
-                  <div>
-                    <div className="text-2xs font-700 text-warm-400 uppercase tracking-widest mb-1.5">Assegnato a</div>
-                    <div className="flex flex-wrap gap-1.5">
-                      {members.map((m, i) => {
-                        const sel = form.assigned_to_id === m.id
-                        return (
-                          <button key={m.id} type="button"
-                            onClick={() => setForm(f=>({...f,assigned_to_id: sel ? '' : m.id}))}
-                            className={`flex items-center gap-1.5 pl-1 pr-2.5 py-1 rounded-full text-xs font-600 transition-all ${
-                              sel ? 'bg-warm-900 text-white' : 'bg-white text-warm-600 border border-warm-200 hover:border-warm-300'
-                            }`}>
-                            <div className={`w-5 h-5 rounded-full flex items-center justify-center text-2xs font-700 flex-shrink-0 ${sel ? 'bg-white/20 text-white' : AV_COLORS[i%AV_COLORS.length]}`}>
-                              {initials(m.full_name)}
-                            </div>
-                            {m.full_name.split(' ')[0]}
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
           </form>
