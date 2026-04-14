@@ -3,7 +3,7 @@ import { api } from '../../lib/api'
 import { useApp } from '../../App'
 import {
   DndContext, PointerSensor, TouchSensor, useSensor, useSensors,
-  useDroppable, useDraggable,
+  useDroppable, useDraggable, pointerWithin,
 } from '@dnd-kit/core'
 
 const STAGES = [
@@ -299,7 +299,7 @@ const STAGE_NEXT_LABEL = { proposto: 'Campione →', campione: 'Offerta →', of
 function DroppableColumn({ id, children }) {
   const { setNodeRef } = useDroppable({ id })
   return (
-    <div ref={setNodeRef} className="flex-1 overflow-y-auto p-2 scrollbar-none">
+    <div ref={setNodeRef} className="flex-1 overflow-y-auto p-2 scrollbar-none min-h-[200px]">
       {children}
     </div>
   )
@@ -739,7 +739,7 @@ export default function ProductPipeline({ preProject, onModalClose }) {
 
       {/* Kanban */}
       {tab === 'kanban' && (
-        <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
+        <DndContext sensors={sensors} collisionDetection={pointerWithin} onDragEnd={handleDragEnd}>
           <div className="flex flex-1 overflow-x-auto scrollbar-none bg-warm-50">
             {STAGES.map(stage => {
               const cards = filtered.filter(o => o.stage === stage.key)
