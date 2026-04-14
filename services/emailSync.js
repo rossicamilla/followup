@@ -70,20 +70,38 @@ async function syncEmailsForUser(userId) {
     return { processed: 0, updated: 0 };
   }
 
+  // Carica profilo utente per ricavare il dominio aziendale
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('email')
+    .eq('id', userId)
+    .single();
+  const userDomain = profile?.email?.split('@')[1]?.toLowerCase() || null;
+
+  // Filtra email interne (stessa azienda) — non devono creare nuove idee
+  const internalEmails = new Set();
+  if (userDomain) {
+    emails.forEach(e => {
+      const senderDomain = e.from?.emailAddress?.address?.split('@')[1]?.toLowerCase();
+      if (senderDomain === userDomain) internalEmails.add(e.id);
+    });
+  }
+
   // Carica dati CRM dell'utente
   const [{ data: projects }, { data: contacts }] = await Promise.all([
     supabase.from('projects').select('id, name, stage, dev_steps, notes').in('stage', ['idea', 'sviluppo', 'pronto']),
     supabase.from('contacts').select('id, name, email, stage, notes').eq('owner_id', userId),
   ]);
 
-  // Prepara testo email per Claude
+  // Prepara testo email per Claude — marca quelle interne
   const emailsText = emails.map(e => {
     const body = e.body?.content
       ?.replace(/<[^>]*>/g, ' ')
       .replace(/\s+/g, ' ')
       .trim()
       .slice(0, 600) || e.bodyPreview || '';
-    return `[Da: ${e.from?.emailAddress?.name} <${e.from?.emailAddress?.address}>]\n` +
+    const internal = internalEmails.has(e.id) ? ' [COLLEGA INTERNO]' : '';
+    return `[Da: ${e.from?.emailAddress?.name} <${e.from?.emailAddress?.address}>${internal}]\n` +
            `[Oggetto: ${e.subject}]\n${body}`;
   }).join('\n\n---\n\n');
 
@@ -99,7 +117,7 @@ async function syncEmailsForUser(userId) {
       max_tokens: 2000,
       messages: [{
         role: 'user',
-        content: `Sei un assistente CRM per un'azienda italiana B2B di distribuzione alimentare.
+        content: `Sei un assistente CRM per un'azienda italiana B2B di distribuzione alimentare (importazione e distribuzione di prodotti food).
 Analizza queste email e restituisci aggiornamenti per il CRM. Rispondi SOLO con JSON valido, senza testo aggiuntivo.
 
 PROGETTI GIÀ NEL CRM: ${projectsList}
@@ -107,13 +125,24 @@ PROGETTI GIÀ NEL CRM: ${projectsList}
 EMAIL:
 ${emailsText}
 
+REGOLE IMPORTANTI:
+1. Le email marcate [COLLEGA INTERNO] NON devono generare nuove idee (new_ideas). Possono solo aggiornare progetti esistenti o contatti.
+2. Una "new_idea" va creata SOLO se:
+   - Viene da un fornitore o cliente ESTERNO (non collega)
+   - Menziona esplicitamente un prodotto alimentare specifico da importare/distribuire
+   - È una proposta commerciale concreta, NON un semplice aggiornamento, follow-up o discussione
+   - Il prodotto NON è già presente nel CRM con nome simile
+   In caso di dubbio, NON creare la new_idea.
+3. Aggiorna un progetto esistente solo se l'email è chiaramente correlata a quel progetto per nome o contesto.
+4. Non aggiungere note generiche o ridondanti.
+
 JSON da restituire:
 {
   "project_updates": [
     {
-      "name": "nome esatto progetto dal CRM (o null se non corrisponde a nessuno)",
-      "completed_steps": ["lista step completati tra: Ricerca fornitore, Campione ricevuto, Valutazione qualità, Analisi costo, Etichetta / Packaging, Approvazione finale"],
-      "notes_to_add": "testo breve da aggiungere alle note oppure null",
+      "name": "nome esatto progetto dal CRM (deve corrispondere a uno di quelli elencati sopra)",
+      "completed_steps": ["step completati tra: Ricerca fornitore, Campione ricevuto, Valutazione qualità, Analisi costo, Etichetta / Packaging, Approvazione finale"],
+      "notes_to_add": "testo breve e specifico da aggiungere oppure null",
       "pipeline": {
         "contact_email": "email mittente",
         "contact_name": "nome mittente",
@@ -124,8 +153,8 @@ JSON da restituire:
   ],
   "new_ideas": [
     {
-      "name": "nome prodotto/idea NON presente nel CRM",
-      "notes": "descrizione breve",
+      "name": "nome prodotto alimentare specifico proposto da fornitore/cliente esterno",
+      "notes": "descrizione breve della proposta",
       "contact_email": "email mittente",
       "market": "Horeca|Retail"
     }
@@ -135,7 +164,7 @@ JSON da restituire:
       "email": "email contatto",
       "name": "nome contatto",
       "stage_hint": "warm|hot|null",
-      "notes_addition": "aggiornamento breve da aggiungere alle note del contatto"
+      "notes_addition": "aggiornamento breve e specifico da aggiungere alle note"
     }
   ]
 }
