@@ -39,12 +39,30 @@ function mapStage(s) {
   return 'idea';
 }
 
+function mapMarket(m) {
+  if (!m) return null;
+  const v = String(m).toLowerCase().trim();
+  if (v.includes('horeca')) return 'Horeca';
+  if (v.includes('retail')) return 'Retail';
+  if (v.includes('export')) return 'Export';
+  if (v.includes('interno')) return 'Interno';
+  return null;
+}
+
 function mapPriority(p) {
   if (!p) return 'media';
   const v = String(p).toUpperCase().trim();
   if (v === 'ALTA' || v === 'HIGH') return 'alta';
   if (v === 'BASSA' || v === 'LOW') return 'bassa';
   return 'media';
+}
+
+// Trova la chiave "Priorità" anche con encoding diverso
+function getPriority(row) {
+  for (const key of Object.keys(row)) {
+    if (key.toLowerCase().startsWith('priorit')) return row[key];
+  }
+  return null;
 }
 
 function parseExcel(buffer) {
@@ -54,16 +72,24 @@ function parseExcel(buffer) {
 
   const rows = XLSX.utils.sheet_to_json(ws, { defval: null });
   return rows
-    .filter(r => r['Nome Progetto']?.toString().trim())
-    .map(r => ({
-      name: r['Nome Progetto'].toString().trim(),
-      market: r['Mercato'] || null,
-      weight_format: r['Peso'] || null,
-      stage: mapStage(r['Stato Avanzamento']),
-      priority: mapPriority(r['Priorità']),
-      client: r['Cliente'] || null,
-      notes: r['Note'] || null,
-    }));
+    .filter(r => r['Nome Prodotto']?.toString().trim())
+    .map(r => {
+      const costRaw = r['Costo Indicativo'];
+      const cost = costRaw != null ? parseFloat(costRaw) : null;
+      return {
+        name: r['Nome Prodotto'].toString().trim(),
+        market: mapMarket(r['Mercato / canale']),
+        weight_format: r['Peso']?.toString().trim() || null,
+        stage: mapStage(r['Stato Avanzamento']),
+        priority: mapPriority(getPriority(r)),
+        supplier: r['Fornitore']?.toString().trim() || null,
+        cost_per_unit: isNaN(cost) ? null : cost,
+        country_code: r['Sigla Paese']?.toString().trim() || null,
+        country: r['Paese']?.toString().trim() || null,
+        client: r['Cliente']?.toString().trim().replace(/\n/g, ' / ') || null,
+        notes: r['Note']?.toString().trim() || null,
+      };
+    });
 }
 
 // ── POST /api/sync/progetti ───────────────────────────────────────────────────
@@ -82,7 +108,7 @@ router.post('/progetti', requireSyncAuth, upload.single('file'), async (req, res
     // 2. Recupera progetti dal DB
     const { data: dbProjects, error: dbErr } = await sb
       .from('projects')
-      .select('id, name, market, stage, priority, client, notes, weight_format, created_at')
+      .select('id, name, market, stage, priority, client, notes, weight_format, supplier, cost_per_unit, country_code, country, created_at')
       .order('created_at', { ascending: true });
 
     if (dbErr) throw new Error(dbErr.message);
@@ -139,12 +165,20 @@ router.post('/progetti', requireSyncAuth, upload.single('file'), async (req, res
           ep.priority !== existing.priority ||
           ep.client !== existing.client ||
           ep.weight_format !== existing.weight_format ||
+          ep.supplier !== existing.supplier ||
+          (ep.cost_per_unit ?? null) !== (existing.cost_per_unit ?? null) ||
+          ep.country_code !== existing.country_code ||
+          ep.country !== existing.country ||
           ep.notes !== existing.notes;
 
         if (changed) {
           const { error } = await sb.from('projects')
-            .update({ market: ep.market, stage: ep.stage, priority: ep.priority,
-                      client: ep.client, weight_format: ep.weight_format, notes: ep.notes })
+            .update({
+              market: ep.market, stage: ep.stage, priority: ep.priority,
+              client: ep.client, weight_format: ep.weight_format, notes: ep.notes,
+              supplier: ep.supplier, cost_per_unit: ep.cost_per_unit,
+              country_code: ep.country_code, country: ep.country,
+            })
             .eq('id', existing.id);
           if (error) stats.errors.push(`UPDATE ${ep.name}: ${error.message}`);
           else stats.updated++;
