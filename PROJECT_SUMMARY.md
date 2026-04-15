@@ -163,11 +163,11 @@ followup-ai/
 **NULLA!** L'app è completa. Serve solo:
 1. Eseguire i file SQL in Supabase
 2. Configurare variabili environment (API keys)
-3. Deploy su Railway (segui DEPLOY_CHECKLIST.md)
+3. Deploy su Render (segui DEPLOY_CHECKLIST.md)
 
 ### Tempi stima
 - Setup Supabase: 5-10 min
-- Deploy su Railway: 5-10 min
+- Deploy su Render: 5-10 min
 - Test: 10-15 min
 - **Totale: ~20-30 minuti per andare live**
 
@@ -210,8 +210,8 @@ Oltre ai requirements originali:
 - ✓ JWT authentication (Supabase Auth)
 - ✓ Row Level Security (RLS) database
 - ✓ CORS configurato
-- ✓ HTTPS only (Railway)
-- ✓ API keys NON in git (variabili Railway)
+- ✓ HTTPS only (Render)
+- ✓ API keys NON in git (variabili Render)
 - ✓ Input sanitization
 - ✓ SQL injection prevention (Supabase client library)
 
@@ -245,7 +245,7 @@ Quando l'app è live, puoi aggiungere:
 
 Se hai problemi:
 1. Leggi README.md e DEPLOY_CHECKLIST.md
-2. Controlla i Logs su Railway
+2. Controlla i Logs su Render
 3. Verifica che tutte le API keys siano corrette
 4. Prova localmente prima di production
 
@@ -257,7 +257,7 @@ Se hai problemi:
 - Architettura è modulare (facile aggiungere nuove route)
 - Database design è ottimizzato per query veloci
 - UI è moderna e responsive
-- Pronto per scale (Supabase + Railway)
+- Pronto per scale (Supabase + Render)
 
 **L'app è PRONTA PER IL DEPLOY! 🚀**
 

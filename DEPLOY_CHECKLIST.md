@@ -26,7 +26,7 @@ Usa questa checklist per deployare l'app in produzione.
 
 ---
 
-## 🚀 LOCAL TESTING (Prima di Railway)
+## 🚀 LOCAL TESTING (Prima di Render)
 
 ### 1. Setup locale
 ```bash
@@ -66,25 +66,25 @@ npm start
 - [ ] Crea un nuovo progetto
 - [ ] Sposta progetto tra stage
 
-### 5. Se tutto funziona localmente → vai a Railway
+### 5. Se tutto funziona localmente → vai a Render
 
 ---
 
-## 🚂 RAILWAY DEPLOY
+## 🚀 RENDER DEPLOY
 
-### 1. Crea account Railway
-- [ ] Vai a https://railway.app
+### 1. Crea account Render
+- [ ] Vai a https://render.com
 - [ ] Signup con GitHub
-- [ ] Autorizza Railway ad accedere ai tuoi repo
+- [ ] Autorizza Render ad accedere ai tuoi repo
 
-### 2. Crea nuovo progetto
-- [ ] Dashboard → New Project
-- [ ] Deploy from GitHub
-- [ ] Seleziona `kamykaramellaaa/followup-ai`
+### 2. Crea nuovo Web Service
+- [ ] Dashboard → New → Web Service
+- [ ] Connect GitHub repo
+- [ ] Seleziona `rossicamilla/followup`
 - [ ] Autorizza
 
 ### 3. Aggiungi variabili ambiente
-- [ ] Railway → Variables
+- [ ] Render → Environment
 - [ ] Aggiungi:
 
 ```
@@ -92,22 +92,22 @@ SUPABASE_URL = https://xxxxx.supabase.co
 SUPABASE_ANON_KEY = eyJxxxxx
 ANTHROPIC_API_KEY = sk-ant-xxxxx
 OPENAI_API_KEY = sk-xxxxx
-ALLOWED_ORIGINS = https://followup-ai-prod.up.railway.app
+ALLOWED_ORIGINS = https://followup-ai.onrender.com
 NODE_ENV = production
-PORT = 3001  (opzionale, Railway ne assegna uno)
+PORT = 3001
 ```
 
 ### 4. Deploy
-- [ ] Railway farà auto-deploy da main branch
+- [ ] Render farà auto-deploy da main branch
 - [ ] Attendi ~2-3 minuti
-- [ ] Copia il domain che ti assegna (tipo `followup-ai-prod.up.railway.app`)
+- [ ] Copia il domain che ti assegna (tipo `followup-ai.onrender.com`)
 
 ### 5. Aggiorna il frontend
 - [ ] Apri `public/index.html`
 - [ ] Linea ~418: `const BACKEND = 'YOUR_BACKEND_URL';`
-- [ ] Cambia con il tuo Railway domain:
+- [ ] Cambia con il tuo Render domain:
   ```javascript
-  const BACKEND = 'https://followup-ai-prod.up.railway.app';
+  const BACKEND = 'https://followup-ai.onrender.com';
   ```
 - [ ] Salva, commit, push:
   ```bash
@@ -115,10 +115,10 @@ PORT = 3001  (opzionale, Railway ne assegna uno)
   git commit -m "Update backend URL for production"
   git push origin main
   ```
-- [ ] Railway rifarà auto-deploy
+- [ ] Render rifarà auto-deploy
 
 ### 6. Test in produzione
-- [ ] Vai a https://followup-ai-prod.up.railway.app
+- [ ] Vai a https://followup-ai.onrender.com
 - [ ] Login
 - [ ] Test workflow completo
 - [ ] Verifica che i task si salvino nel DB
@@ -163,11 +163,11 @@ Adesso sei **Admin** e puoi:
 → File audio deve essere < 25MB
 → Formati supportati: webm, mp4, mp3, wav, ogg
 
-### Railway mostra errore
-→ Vai a Logs (nel dashboard Railway)  
+### Render mostra errore
+→ Vai a Logs (nel dashboard Render)  
 → Copia l'errore e controlla:
   - Variabili ambiente corrette?
-  - File `.env` non caricato (normale, usa Variables)
+  - File `.env` non caricato (normale, usa Environment)
   - Dipendenze installate? (controlla `npm install` localmente)
 
 ---
@@ -176,9 +176,9 @@ Adesso sei **Admin** e puoi:
 
 Se vuoi un dominio personalizzato (es. `crm.confluencia.it`):
 
-1. Railway → Settings → Custom Domain
+1. Render → Settings → Custom Domain
 2. Aggiungi il tuo dominio
-3. Railway ti dà le istruzioni DNS
+3. Render ti dà le istruzioni DNS
 4. Configura DNS dal tuo registrar (GoDaddy, Namecheap, ecc.)
 5. Aspetta 24h per propagazione
 
@@ -186,10 +186,10 @@ Se vuoi un dominio personalizzato (es. `crm.confluencia.it`):
 
 ## 🔐 SECURITY CHECKLIST
 
-- [ ] `ANTHROPIC_API_KEY` e `OPENAI_API_KEY` NON sono in git (solo in Railway Variables)
+- [ ] `ANTHROPIC_API_KEY` e `OPENAI_API_KEY` NON sono in git (solo in Render Environment)
 - [ ] `SUPABASE_ANON_KEY` è OK pubblica (è per i client, usare service key per backend sarebbe meglio ma non necessario qui)
 - [ ] RLS (Row Level Security) è abilitato su Supabase
-- [ ] HTTPS forzato (Railway fa auto)
+- [ ] HTTPS forzato (Render fa auto)
 - [ ] CORS configurato: `ALLOWED_ORIGINS` contiene solo tuoi domain
 
 ---
@@ -197,7 +197,7 @@ Se vuoi un dominio personalizzato (es. `crm.confluencia.it`):
 ## 📞 SUPPORT
 
 Se hai problemi:
-1. Controlla i Logs (Railway Dashboard → Logs)
+1. Controlla i Logs (Render Dashboard → Logs)
 2. Leggi il README.md
 3. Verifica che tutte le variabili siano corrette
 4. Prova localmente prima di deployare in prod

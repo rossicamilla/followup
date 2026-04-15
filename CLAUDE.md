@@ -130,7 +130,7 @@ Apple Calendar è stato escluso perché l'implementazione sarebbe complessa e il
 | AI — elaborazione | Anthropic Claude API |
 | Calendario | Microsoft Graph API (Outlook) |
 | Auth | Supabase Auth (multi-ruolo) |
-| Hosting target | Railway |
+| Hosting target | Render |
 | Repository | `github.com/kamykaramellaaa/followup-ai` |
 
 ---
@@ -161,13 +161,13 @@ Il riferimento principale è **Attio CRM** — non per le funzionalità, ma per 
 - ❌ Bozze email Claude non implementate
 - ❌ Email automatiche di reminder non implementate
 - ❌ Integrazione Outlook Calendar non implementata
-- ⚠️ Deploy su Railway non ancora stabile (precedenti tentativi su Render falliti)
+- ⚠️ Deploy su Render attivo (in configurazione)
 
 ---
 
 ## Priorità di sviluppo suggerite
 
-1. **Stabilizzare il deploy** su Railway
+1. **Stabilizzare il deploy** su Render
 2. **Integrazione Outlook Calendar** — sblocca l'utilità immediata per il titolare
 3. **Input vocale + Whisper + Claude** — funzionalità core differenziante
 4. **Bozze email suggerite** — aumenta il valore per tutti gli utenti

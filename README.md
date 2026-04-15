@@ -53,32 +53,32 @@ npm start
 
 ---
 
-## 📦 Deploy su Railway
+## 📦 Deploy su Render
 
 ### 1. **Push su GitHub** (già fatto ✓)
 
-### 2. **Crea un progetto Railway**
-- Vai su [railway.app](https://railway.app)
-- New Project → GitHub repo
-- Seleziona `kamykaramellaaa/followup-ai`
+### 2. **Crea un Web Service su Render**
+- Vai su [render.com](https://render.com)
+- New → Web Service → Connect GitHub repo
+- Seleziona `rossicamilla/followup`
 
 ### 3. **Configure variabili**
-Railway → Variables:
+Render → Environment:
 - `SUPABASE_URL` 
 - `SUPABASE_ANON_KEY`
 - `ANTHROPIC_API_KEY`
 - `OPENAI_API_KEY`
-- `ALLOWED_ORIGINS` = `https://yourdomain.railway.app`
+- `ALLOWED_ORIGINS` = `https://yourdomain.onrender.com`
 - `NODE_ENV` = `production`
 
 ### 4. **Deploy**
-- Railway auto-deploy da main branch
-- URL sarà tipo: `https://followup-ai-prod.up.railway.app`
+- Render auto-deploy da main branch
+- URL sarà tipo: `https://followup-ai.onrender.com`
 
 ### 5. **Aggiorna Frontend**
 ```html
 <!-- public/index.html -->
-const BACKEND = 'https://followup-ai-prod.up.railway.app';  <!-- aggiorna questo -->
+const BACKEND = 'https://followup-ai.onrender.com';  <!-- aggiorna questo -->
 ```
 
 ---

@@ -24,7 +24,7 @@ Guida passo-passo per configurare l'integrazione Outlook Calendar con FollowUp A
 3. Nome: `FollowUp AI Calendar Integration`
 4. Account type: **Accounts in this organizational directory only** (se aziendale)
    - Oppure: **Accounts in any organizational directory and personal Microsoft accounts** (se personale)
-5. Redirect URI: **Web** → `https://yourdomain.railway.app/api/outlook/callback`
+5. Redirect URI: **Web** → `https://yourdomain.onrender.com/api/outlook/callback`
    - Localmente: `http://localhost:3001/api/outlook/callback`
 6. Click **Register**
 
@@ -33,7 +33,7 @@ Dalla pagina dell'app, copia:
 - **Application (client) ID** → `MICROSOFT_CLIENT_ID`
 - **Directory (tenant) ID** → `MICROSOFT_TENANT`
 
-Questi valori vanno in `.env` su Railway.
+Questi valori vanno in `.env` su Render.
 
 ---
 
@@ -74,7 +74,7 @@ offline_access (Delegated)
 3. Redirect URIs:
    ```
    http://localhost:3001/api/outlook/callback
-   https://yourdomain.railway.app/api/outlook/callback
+   https://yourdomain.onrender.com/api/outlook/callback
    ```
 4. Controlla:
    - ✅ "Allow public client flows" = OFF
@@ -83,21 +83,21 @@ offline_access (Delegated)
 
 ---
 
-## 🚀 Step 5: Configura Railway Variables
+## 🚀 Step 5: Configura Render Environment Variables
 
 Una volta che hai i 3 dati da Azure:
 - `MICROSOFT_CLIENT_ID`
 - `MICROSOFT_CLIENT_SECRET`
 - `MICROSOFT_TENANT`
 
-Vai su **Railway Dashboard** → **Project** → **Variables**:
+Vai su **Render Dashboard** → **Web Service** → **Environment**:
 
 ```env
 MICROSOFT_CLIENT_ID = xxxx-xxxx-xxxx-xxxx
 MICROSOFT_CLIENT_SECRET = xxxxx (quello che hai copiato)
 MICROSOFT_TENANT = xxxx-xxxx-xxxx-xxxx
-MICROSOFT_REDIRECT_URI = https://yourdomain.railway.app/api/outlook/callback
-FRONTEND_URL = https://yourdomain.railway.app
+MICROSOFT_REDIRECT_URI = https://yourdomain.onrender.com/api/outlook/callback
+FRONTEND_URL = https://yourdomain.onrender.com
 ```
 
 Salva e redeploy.
@@ -106,7 +106,7 @@ Salva e redeploy.
 
 ## ✅ Step 6: Esegui il SQL in Supabase
 
-Una volta deployato su Railway:
+Una volta deployato su Render:
 
 1. Vai a Supabase Dashboard
 2. SQL Editor
@@ -121,7 +121,7 @@ Questo crea le tabelle:
 
 ## 🎯 Step 7: Testa l'integrazione
 
-1. Accedi all'app: `https://yourdomain.railway.app`
+1. Accedi all'app: `https://yourdomain.onrender.com`
 2. Clicca il bottone **📧 Connetti Outlook** (topbar in alto a destra)
 3. Si apre una finestra di login Microsoft
 4. Login con `admin@confluencia.it` (o un account Microsoft 365)
@@ -142,7 +142,7 @@ Se vedi l'evento:
 - ✅ **Integration funziona!**
 
 Se non appare:
-- Controlla i Logs su Railway (Dashboard → Logs)
+- Controlla i Logs su Render (Dashboard → Logs)
 - Verifica che le variabili siano corrette
 - Controlla che le API permissions siano state aggiunte
 
@@ -191,7 +191,7 @@ Se completi l'evento in Outlook, **non sincronizza automaticamente** nell'app.
 - [ ] Tenant ID copiato
 - [ ] API Permissions aggiunte (Calendars.ReadWrite)
 - [ ] Redirect URI configurato
-- [ ] Railway variables salvate
+- [ ] Render variables salvate
 - [ ] App deployata
 - [ ] SQL eseguito in Supabase
 - [ ] Test: connessione Outlook funziona
@@ -203,7 +203,7 @@ Se completi l'evento in Outlook, **non sincronizza automaticamente** nell'app.
 ## 📞 Support
 
 Se hai problemi:
-1. Controlla i Logs (Railway Dashboard)
+1. Controlla i Logs (Render Dashboard)
 2. Verifica le variabili environment
 3. Controlla Azure Portal per gli errori di API
 4. Ricollega Outlook (bottone 📧)
